@@ -6,6 +6,78 @@ import os
 import tempfile
 import spaces
 
+from typing import Iterable
+from gradio.themes import Soft
+from gradio.themes.utils import colors, fonts, sizes
+
+colors.orange_red = colors.Color(
+    name="orange_red",
+    c50="#FFF0E5",
+    c100="#FFE0CC",
+    c200="#FFC299",
+    c300="#FFA366",
+    c400="#FF8533",
+    c500="#FF4500",
+    c600="#E63E00",
+    c700="#CC3700",
+    c800="#B33000",
+    c900="#992900",
+    c950="#802200",
+)
+
+class OrangeRedTheme(Soft):
+    def __init__(
+        self,
+        *,
+        primary_hue: colors.Color | str = colors.gray,
+        secondary_hue: colors.Color | str = colors.orange_red, # Use the new color
+        neutral_hue: colors.Color | str = colors.slate,
+        text_size: sizes.Size | str = sizes.text_lg,
+        font: fonts.Font | str | Iterable[fonts.Font | str] = (
+            fonts.GoogleFont("Outfit"), "Arial", "sans-serif",
+        ),
+        font_mono: fonts.Font | str | Iterable[fonts.Font | str] = (
+            fonts.GoogleFont("IBM Plex Mono"), "ui-monospace", "monospace",
+        ),
+    ):
+        super().__init__(
+            primary_hue=primary_hue,
+            secondary_hue=secondary_hue,
+            neutral_hue=neutral_hue,
+            text_size=text_size,
+            font=font,
+            font_mono=font_mono,
+        )
+        super().set(
+            background_fill_primary="*primary_50",
+            background_fill_primary_dark="*primary_900",
+            body_background_fill="linear-gradient(135deg, *primary_200, *primary_100)",
+            body_background_fill_dark="linear-gradient(135deg, *primary_900, *primary_800)",
+            button_primary_text_color="white",
+            button_primary_text_color_hover="white",
+            button_primary_background_fill="linear-gradient(90deg, *secondary_500, *secondary_600)",
+            button_primary_background_fill_hover="linear-gradient(90deg, *secondary_600, *secondary_700)",
+            button_primary_background_fill_dark="linear-gradient(90deg, *secondary_600, *secondary_700)",
+            button_primary_background_fill_hover_dark="linear-gradient(90deg, *secondary_500, *secondary_600)",
+            button_secondary_text_color="black",
+            button_secondary_text_color_hover="white",
+            button_secondary_background_fill="linear-gradient(90deg, *primary_300, *primary_300)",
+            button_secondary_background_fill_hover="linear-gradient(90deg, *primary_400, *primary_400)",
+            button_secondary_background_fill_dark="linear-gradient(90deg, *primary_500, *primary_600)",
+            button_secondary_background_fill_hover_dark="linear-gradient(90deg, *primary_500, *primary_500)",
+            slider_color="*secondary_500",
+            slider_color_dark="*secondary_600",
+            block_title_text_weight="600",
+            block_border_width="3px",
+            block_shadow="*shadow_drop_lg",
+            button_primary_shadow="*shadow_drop_lg",
+            button_large_padding="11px",
+            color_accent_soft="*primary_100",
+            block_label_background_fill="*primary_200",
+        )
+
+orange_red_theme = OrangeRedTheme()
+
 try:
     from sam_audio import SAMAudio, SAMAudioProcessor
 except ImportError as e:
@@ -200,7 +272,7 @@ css = """
 
 with gr.Blocks() as demo:
     gr.Markdown("# **SAM-Audio-Demo**", elem_id="main-title")
-    gr.Markdown("Segment and isolate specific sounds from audio files using natural language descriptions, powered by [SAM-Audio-Large](https://huggingface.co/facebook/sam-audio-large).")
+    gr.Markdown("Segment and isolate specific music/sounds from audio files using natural language descriptions, powered by [SAM-Audio-Large](https://huggingface.co/facebook/sam-audio-large).")
 
     with gr.Column(elem_id="col-container"):
         with gr.Row():
@@ -208,7 +280,7 @@ with gr.Blocks() as demo:
                 input_file = gr.Audio(label="Input Audio", type="filepath")
                 text_prompt = gr.Textbox(label="Sound to Isolate", placeholder="e.g., 'A man speaking', 'Bird chirping'")
 
-                with gr.Accordion("Advanced Settings", open=True):
+                with gr.Accordion("Advanced Settings", open=False):
                     chunk_duration_slider = gr.Slider(
                         minimum=10, maximum=60, value=30, step=5,
                         label="Chunk Duration (seconds)",
@@ -239,8 +311,4 @@ with gr.Blocks() as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch(theme=gr.themes.Soft(
-            primary_hue="blue",
-            secondary_hue="indigo",
-            neutral_hue="slate",
-        ), css=css, mcp_server=True, ssr_mode=False)
+    demo.launch(theme=orange_red_theme, css=css, mcp_server=True, ssr_mode=False)
