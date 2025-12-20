@@ -224,9 +224,9 @@ with gr.Blocks() as demo:
 
         gr.Examples(
             examples=[
-                ["example_audio/speech.mp3", "Vocal", 30],
+                ["example_audio/speech.mp3", "Music", 30],
                 ["example_audio/song.mp3", "Drum", 30],
-                ["example_audio/song2.mp3", "Vocal", 30],
+                ["example_audio/song2.mp3", "Music", 30],
             ],
             inputs=[input_file, text_prompt, chunk_duration_slider],
             label="Audio Examples"
