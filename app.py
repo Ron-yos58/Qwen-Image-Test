@@ -133,7 +133,7 @@ def save_audio(tensor, sample_rate):
 # ---------------------------------------------------------
 # Main Processing Logic
 # ---------------------------------------------------------
-@spaces.GPU(duration=300)
+@spaces.GPU
 def process_text_prompting(audio_file, description, progress=gr.Progress()):
     if not audio_file:
         return None, None, "❌ Please upload an audio file."
