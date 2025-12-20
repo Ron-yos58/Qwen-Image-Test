@@ -220,7 +220,7 @@ with gr.Blocks() as demo:
             with gr.Column(scale=1):
                 output_target = gr.Audio(label="Isolated Sound (Target)", type="filepath")
                 output_residual = gr.Audio(label="Background (Residual)", type="filepath")
-                status_out = gr.Textbox(label="Status", interactive=False, show_label=True)
+                status_out = gr.Textbox(label="Status", interactive=False, show_label=True, height=200)
 
     run_btn.click(
         fn=process_audio,
