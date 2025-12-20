@@ -325,7 +325,7 @@ def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progres
 # ---------------------------------------------------------
 css = """
 #main-title h1 {font-size: 2.3em !important; text-align: center;}
-.gradio-container {max-width: 1000px !important; margin: auto;}
+.gradio-container {max-width: 1400px !important; margin: auto;}
 """
 
 with gr.Blocks(css=css) as demo:
