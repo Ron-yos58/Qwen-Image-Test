@@ -17,6 +17,10 @@ try:
     from sam3.model_builder import build_sam3_video_predictor
 except ImportError as e:
     print(f"Warning: Essential libraries (sam_audio, sam3, torchcodec) not found. {e}")
+    # Define dummy placeholders to prevent immediate crash if libs are missing during check
+    SAMAudio = None
+    SAMAudioProcessor = None
+    build_sam3_video_predictor = None
 
 # ---------------------------------------------------------
 # Constants & Configuration
@@ -29,33 +33,37 @@ MAX_DURATION_WITHOUT_CHUNKING = 30.0 # seconds
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ---------------------------------------------------------
-# Model Loading
+# Direct Model Loading (No Lazy Loading)
 # ---------------------------------------------------------
-print(f"Loading {MODEL_ID} on {device}...")
+print(f"----------------------------------------------------------------")
+print(f"Initializing Models on {device}...")
+print(f"----------------------------------------------------------------")
 
-model = None
-processor = None
-video_predictor = None
+# 1. Load SAM-Audio
+print(f"Loading {MODEL_ID}...")
+try:
+    model = SAMAudio.from_pretrained(MODEL_ID).to(device).eval()
+    processor = SAMAudioProcessor.from_pretrained(MODEL_ID)
+    print("✅ SAM-Audio loaded successfully.")
+except Exception as e:
+    print(f"❌ Error loading SAM-Audio: {e}")
+    model = None
+    processor = None
 
-def load_models():
-    global model, processor
-    if model is None:
-        try:
-            model = SAMAudio.from_pretrained(MODEL_ID).to(device).eval()
-            processor = SAMAudioProcessor.from_pretrained(MODEL_ID)
-            print("SAM-Audio loaded successfully.")
-        except Exception as e:
-            print(f"Error loading SAM-Audio: {e}")
+# 2. Load SAM3 (Visual Predictor)
+print("Loading SAM3 Video Predictor...")
+try:
+    video_predictor = build_sam3_video_predictor()
+    # If SAM3 needs specific device movement, it's usually handled internally or via .to(device) 
+    # dependent on implementation, but standard build function usually sets it up.
+    print("✅ SAM3 loaded successfully.")
+except Exception as e:
+    print(f"❌ Error loading SAM3: {e}")
+    video_predictor = None
 
-def get_sam3_predictor():
-    global video_predictor
-    if video_predictor is None:
-        print("Loading SAM3 Video Predictor...")
-        video_predictor = build_sam3_video_predictor()
-    return video_predictor
-
-# Load audio models at startup
-load_models()
+print(f"----------------------------------------------------------------")
+print(f"All models initialized.")
+print(f"----------------------------------------------------------------")
 
 # ---------------------------------------------------------
 # Audio Processing Helpers (Chunking & Merging)
@@ -149,12 +157,16 @@ def save_audio_temp(tensor, sample_rate):
 # ---------------------------------------------------------
 # Tab 1: Text Prompting (with Chunking)
 # ---------------------------------------------------------
-@spaces.GPU(duration=300)
+@spaces.GPU(duration=120)
 def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_DURATION, progress=gr.Progress()):
-    load_models()
+    # Global models are already loaded
+    global model, processor
     
     progress(0.05, desc="Checking inputs...")
     
+    if model is None or processor is None:
+        return None, None, "❌ Model failed to load at startup. Check logs."
+
     if not file_path:
         return None, None, "❌ Please upload an audio or video file."
     if not text_prompt or not text_prompt.strip():
@@ -232,12 +244,16 @@ def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_
 # ---------------------------------------------------------
 # Tab 2: Visual Prompting
 # ---------------------------------------------------------
-@spaces.GPU
+@spaces.GPU(duration=180)
 def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progress()):
+    # Global models are already loaded
+    global model, processor, video_predictor
+
+    if model is None or video_predictor is None:
+         return None, None, "❌ Models failed to load at startup. Check logs."
+
     if video_file is None or not visual_prompt_text:
         return None, None, "❌ Please provide both a video and a description."
-
-    load_models()
     
     try:
         progress(0.1, desc="Initializing Video Decoder...")
@@ -246,11 +262,10 @@ def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progres
         frames = decoder[:] # Get all frames (careful with memory on long videos)
         
         # 2. Generate Masks using SAM3
-        progress(0.2, desc="Loading SAM3...")
-        predictor = get_sam3_predictor()
+        progress(0.2, desc="Starting SAM3 Session...")
         
         # Start SAM3 Session
-        response = predictor.handle_request({
+        response = video_predictor.handle_request({
             "type": "start_session",
             "resource_path": video_file,
         })
@@ -260,7 +275,6 @@ def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progres
         masks = []
         
         # Frame-by-frame masking
-        # Note: This uses a simple approach. Complex object tracking would require more advanced SAM3 usage.
         step = 1 # Process every frame
         total_frames = len(decoder)
         
@@ -268,7 +282,7 @@ def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progres
             if frame_index % 10 == 0:
                 progress(0.3 + (frame_index/total_frames)*0.4, desc=f"Masking frame {frame_index}/{total_frames}")
             
-            response = predictor.handle_request({
+            response = video_predictor.handle_request({
                 "type": "add_prompt",
                 "session_id": session_id,
                 "frame_index": frame_index,
@@ -315,7 +329,7 @@ css = """
 """
 
 with gr.Blocks(css=css) as demo:
-    gr.Markdown("# **SAM-Audio** 🔊", elem_id="main-title")
+    gr.Markdown("# **SAM-Audio-Demo**", elem_id="main-title")
     gr.Markdown("Segment and isolate sounds using **Text** or **Visual** prompts.")
 
     with gr.Tabs():
