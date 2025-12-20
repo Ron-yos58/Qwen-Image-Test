@@ -7,18 +7,15 @@ import tempfile
 import spaces
 
 # ---------------------------------------------------------
-# Import Custom Libraries
+# Import SAM-Audio
 # ---------------------------------------------------------
 try:
     from sam_audio import SAMAudio, SAMAudioProcessor
-    # Visual Prompting dependencies
-    from torchcodec.decoders import VideoDecoder
-    from sam3.model_builder import build_sam3_video_predictor
 except ImportError as e:
-    print(f"Warning: Essential libraries (sam_audio, sam3, torchcodec) not found. {e}")
+    print(f"Warning: 'sam_audio' library not found. Please install it via git. {e}")
 
 # ---------------------------------------------------------
-# Constants & Configuration
+# Configuration
 # ---------------------------------------------------------
 MODEL_ID = "facebook/sam-audio-large"
 DEFAULT_CHUNK_DURATION = 30.0  # Process 30 seconds at a time
@@ -27,12 +24,11 @@ MAX_DURATION_WITHOUT_CHUNKING = 45.0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ---------------------------------------------------------
-# Global Model Loading
+# Model Loading
 # ---------------------------------------------------------
 print(f"Loading {MODEL_ID} on {device}...")
 model = None
 processor = None
-video_predictor = None
 
 def load_models():
     global model, processor
@@ -44,22 +40,14 @@ def load_models():
         except Exception as e:
             print(f"❌ Error loading SAM-Audio: {e}")
 
-def get_sam3_predictor():
-    global video_predictor
-    if video_predictor is None:
-        print("⏳ Loading SAM3 Video Predictor...")
-        video_predictor = build_sam3_video_predictor()
-        print("✅ SAM3 loaded.")
-    return video_predictor
-
-# Load audio model on startup
+# Load model on startup
 load_models()
 
 # ---------------------------------------------------------
-# Robust Audio Helpers (Chunking & Merging)
+# Audio Processing Helpers (Chunking & Merging)
 # ---------------------------------------------------------
 def load_audio(file_path):
-    """Load audio from file (supports both audio and video files)."""
+    """Load audio from file."""
     waveform, sample_rate = torchaudio.load(file_path)
     # Convert to mono if stereo for consistency
     if waveform.shape[0] > 1:
@@ -143,12 +131,12 @@ def save_audio(tensor, sample_rate):
         return tmp.name
 
 # ---------------------------------------------------------
-# Tab 1: Text Prompting (With Robust Chunking)
+# Main Processing Logic
 # ---------------------------------------------------------
-@spaces.GPU(duration=120)
+@spaces.GPU(duration=300)
 def process_text_prompting(audio_file, description, progress=gr.Progress()):
     if not audio_file:
-        return None, None, "❌ Please upload an audio or video file."
+        return None, None, "❌ Please upload an audio file."
     if not description or not description.strip():
         return None, None, "❌ Please enter a text prompt."
 
@@ -223,137 +211,47 @@ def process_text_prompting(audio_file, description, progress=gr.Progress()):
         return None, None, f"❌ Error: {str(e)}"
 
 # ---------------------------------------------------------
-# Tab 2: Visual Prompting (Standard Logic)
-# ---------------------------------------------------------
-@spaces.GPU(duration=180)
-def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progress()):
-    if video_file is None:
-        return None, None, "❌ Please upload a video."
-    if not visual_prompt_text:
-        return None, None, "❌ Please describe the visual object."
-
-    load_models()
-    
-    try:
-        progress(0.1, desc="Initializing Video Decoder...")
-        decoder = VideoDecoder(video_file)
-        
-        # Check duration warning
-        if len(decoder) > 300: # Approx 10 seconds at 30fps
-             print("Warning: Video is long. Visual prompting consumes significant VRAM.")
-
-        frames = decoder[:] # Get all frames
-        
-        progress(0.2, desc="Generating Masks with SAM3...")
-        predictor = get_sam3_predictor()
-        
-        # Start SAM3 Session
-        response = predictor.handle_request({
-            "type": "start_session",
-            "resource_path": video_file,
-        })
-        session_id = response["session_id"]
-        
-        masks = []
-        # Generate masks for every frame
-        # (Optimization: SAM3 can track, but for simplicity/robustness we prompt per frame or use internal tracking if implemented in `video_predictor` properly. 
-        # Here we follow standard snippet logic)
-        total_frames = len(decoder)
-        for frame_index in range(total_frames):
-            if frame_index % 10 == 0:
-                progress(0.2 + (frame_index / total_frames) * 0.3, desc=f"Masking frame {frame_index}/{total_frames}...")
-            
-            response = predictor.handle_request({
-                "type": "add_prompt",
-                "session_id": session_id,
-                "frame_index": frame_index,
-                "text": visual_prompt_text,
-            })
-            mask = response["outputs"]["out_binary_masks"]
-            
-            if mask.shape[0] == 0:
-                mask = np.zeros_like(frames[0, [0]], dtype=bool)
-            masks.append(mask[:1]) # Take first mask
-
-        # Prepare mask tensor
-        final_mask = torch.from_numpy(np.concatenate(masks)).unsqueeze(1)
-        
-        progress(0.6, desc="Separating Audio with SAM-Audio...")
-        # Note: We don't chunk here because visual masks + audio chunking alignment is complex.
-        # We process the file as a single block.
-        inputs = processor(
-            audios=[video_file],
-            descriptions=[""], # Empty text description, relying on mask
-            masked_videos=processor.mask_videos([frames], [final_mask]),
-        ).to(device)
-
-        with torch.inference_mode():
-            result = model.separate(inputs)
-
-        progress(0.9, desc="Saving results...")
-        sr = processor.audio_sampling_rate
-        target_path = save_audio(result.target[0].unsqueeze(0).cpu(), sr)
-        residual_path = save_audio(result.residual[0].unsqueeze(0).cpu(), sr)
-
-        return target_path, residual_path, f"✅ Isolated sound for visual object: '{visual_prompt_text}'"
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return None, None, f"❌ Error: {str(e)}"
-
-# ---------------------------------------------------------
 # Gradio Interface
 # ---------------------------------------------------------
+css = """
+#main-title h1 {font-size: 2.4em}
+"""
+
 with gr.Blocks() as demo:
+    
     gr.Markdown("# **SAM-Audio** 🔊", elem_id="main-title")
-    gr.Markdown("Segment and isolate sounds using **Text Descriptions** or **Visual Cues**.")
+    gr.Markdown("Segment and isolate specific sounds from audio using text descriptions.")
 
-    with gr.Tabs():
-        # ================= TAB 1: Text =================
-        with gr.Tab("Text Prompting"):
-            gr.Markdown("### Isolate sound using a text description")
-            with gr.Row():
-                with gr.Column():
-                    t1_input = gr.Audio(label="Input Audio/Video", type="filepath")
-                    t1_desc = gr.Textbox(label="Description", placeholder="e.g., 'A man speaking', 'Glass breaking'")
-                    t1_btn = gr.Button("Separate Audio", variant="primary")
-                
-                with gr.Column():
-                    t1_status = gr.Textbox(label="Status", interactive=False)
-                    t1_out_target = gr.Audio(label="Target Audio (Isolated)", type="filepath")
-                    t1_out_residual = gr.Audio(label="Residual Audio (Background)", type="filepath")
-            
-            t1_btn.click(
-                fn=process_text_prompting,
-                inputs=[t1_input, t1_desc],
-                outputs=[t1_out_target, t1_out_residual, t1_status]
-            )
+    with gr.Row():
+        with gr.Column(scale=1):
+            t1_input = gr.Audio(label="Input Audio", type="filepath", height=250)
+            t1_desc = gr.Textbox(label="Text Description", placeholder="e.g., 'A man speaking', 'Glass breaking', 'Bird chirping'")
+            t1_btn = gr.Button("Isolate Sound", variant="primary", size="lg")
+        
+        with gr.Column(scale=1):
+            t1_status = gr.Textbox(label="Status", interactive=False)
+            t1_out_target = gr.Audio(label="Target Audio (Isolated)", type="filepath")
+            t1_out_residual = gr.Audio(label="Residual Audio (Background)", type="filepath")
+    
+    # Examples
+    gr.Examples(
+        examples=[
+            ["example_audio/dog_bark.wav", "Dog barking"],
+            ["example_audio/street.wav", "Car horn"],
+        ],
+        inputs=[t1_input, t1_desc],
+        label="Examples"
+    )
 
-        # ================= TAB 2: Visual =================
-        with gr.Tab("Visual Prompting"):
-            gr.Markdown("### Isolate sound corresponding to a visual object")
-            gr.Markdown("**Note:** Visual prompting uses SAM3 to generate masks. Processing long videos may be slow.")
-            with gr.Row():
-                with gr.Column():
-                    t2_input = gr.Video(label="Input Video", format="mp4")
-                    t2_prompt = gr.Textbox(label="Visual Object Description", placeholder="e.g., 'The person on the left', 'The red car'")
-                    t2_btn = gr.Button("Generate Mask & Separate", variant="primary")
-                
-                with gr.Column():
-                    t2_status = gr.Textbox(label="Status", interactive=False)
-                    t2_out_target = gr.Audio(label="Target Audio", type="filepath")
-                    t2_out_residual = gr.Audio(label="Residual Audio", type="filepath")
-
-            t2_btn.click(
-                fn=process_visual_prompting,
-                inputs=[t2_input, t2_prompt],
-                outputs=[t2_out_target, t2_out_residual, t2_status]
-            )
+    t1_btn.click(
+        fn=process_text_prompting,
+        inputs=[t1_input, t1_desc],
+        outputs=[t1_out_target, t1_out_residual, t1_status]
+    )
 
 if __name__ == "__main__":
     demo.launch(theme=gr.themes.Soft(
             primary_hue="blue",
             secondary_hue="indigo",
             neutral_hue="slate",
-        ), mcp_server=True, ssr_mode=False)
+        ), css=css, mcp_server=True, ssr_mode=False)
