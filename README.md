@@ -1,5 +1,5 @@
 ---
-title: SAM Audio Large
+title: SAM Audio Demo
 emoji: 🙊
 colorFrom: red
 colorTo: gray
