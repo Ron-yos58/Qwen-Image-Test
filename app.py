@@ -248,7 +248,7 @@ css = """
 
 with gr.Blocks() as demo:
     gr.Markdown("# **SAM-Audio-Demo**", elem_id="main-title")
-    gr.Markdown("Segment and isolate specific sounds from audio or video files using natural language descriptions.")
+    gr.Markdown("Segment and isolate specific sounds from audio or video files using natural language descriptions, powered by [SAM-Audio-Large](https://huggingface.co/facebook/sam-audio-large).")
 
     with gr.Column(elem_id="col-container"):
         with gr.Row():
@@ -263,12 +263,12 @@ with gr.Blocks() as demo:
                         info="Processing long audio in chunks prevents out-of-memory errors."
                     )
                 
-                run_btn = gr.Button("Separate Audio", variant="primary")
+                run_btn = gr.Button("Segment Audio", variant="primary")
 
             with gr.Column(scale=1):
                 output_target = gr.Audio(label="Isolated Sound (Target)", type="filepath")
                 output_residual = gr.Audio(label="Background (Residual)", type="filepath")
-                status_out = gr.Textbox(label="Status", interactive=False, show_label=False)
+                status_out = gr.Textbox(label="Status", interactive=False, show_label=True)
                 
     run_btn.click(
         fn=process_audio,
