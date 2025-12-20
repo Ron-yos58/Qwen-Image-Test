@@ -222,6 +222,15 @@ with gr.Blocks() as demo:
                 output_residual = gr.Audio(label="Background (Residual)", type="filepath")
                 status_out = gr.Textbox(label="Status", interactive=False, show_label=True, lines=8)
 
+        gr.Examples(
+            examples=[
+                ["example_audio/speech.wav", "A man speaking", 30],
+                ["example_audio/nature.wav", "Birds chirping", 30]
+            ],
+            inputs=[input_file, text_prompt, chunk_duration_slider],
+            label="Audio Examples"
+        )
+    
     run_btn.click(
         fn=process_audio,
         inputs=[input_file, text_prompt, chunk_duration_slider],
