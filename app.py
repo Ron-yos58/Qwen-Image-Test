@@ -381,7 +381,7 @@ def process_span_prompting(audio_file, description, anchors_df, progress=gr.Prog
 # Gradio Interface
 # ---------------------------------------------------------
 css = """
-#main-title h1 {font-size: 2.4em !important; text-align: center;}
+#main-title h1 {font-size: 2.4em}
 .gradio-container {max-width: 1200px !important; margin: auto;}
 """
 
