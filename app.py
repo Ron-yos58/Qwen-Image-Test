@@ -356,4 +356,4 @@ if __name__ == "__main__":
             primary_hue="blue",
             secondary_hue="indigo",
             neutral_hue="slate",
-        ), css=css, mcp_server=True, ssr_mode=False)
+        ), mcp_server=True, ssr_mode=False)
