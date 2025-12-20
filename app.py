@@ -155,7 +155,7 @@ def save_audio_temp(tensor, sample_rate):
 # ---------------------------------------------------------
 # Tab 1: Text Prompting (with Chunking)
 # ---------------------------------------------------------
-@spaces.GPU(duration=300)
+@spaces.GPU(duration=120)
 def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_DURATION, progress=gr.Progress()):
     global model, processor
     
@@ -236,7 +236,7 @@ def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_
 # ---------------------------------------------------------
 # Tab 2: Visual Prompting
 # ---------------------------------------------------------
-@spaces.GPU
+@spaces.GPU(duration=180)
 def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progress()):
     global model, processor, video_predictor
 
@@ -306,7 +306,7 @@ def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progres
 # ---------------------------------------------------------
 # Tab 3: Span Prompting (Temporal Anchors)
 # ---------------------------------------------------------
-@spaces.GPU
+@spaces.GPU(duration=120)
 def process_span_prompting(audio_file, description, anchors_df, progress=gr.Progress()):
     global model, processor
     
@@ -381,8 +381,8 @@ def process_span_prompting(audio_file, description, anchors_df, progress=gr.Prog
 # Gradio Interface
 # ---------------------------------------------------------
 css = """
-#main-title h1 {font-size: 2.3em !important; text-align: center;}
-.gradio-container {max-width: 1000px !important; margin: auto;}
+#main-title h1 {font-size: 2.4em !important; text-align: center;}
+.gradio-container {max-width: 1200px !important; margin: auto;}
 """
 
 with gr.Blocks(css=css) as demo:
