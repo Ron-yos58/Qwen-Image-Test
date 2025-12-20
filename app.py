@@ -381,7 +381,7 @@ def process_span_prompting(audio_file, description, anchors_df, progress=gr.Prog
 # Gradio Interface
 # ---------------------------------------------------------
 
-with gr.Blocks(css=css) as demo:
+with gr.Blocks() as demo:
     gr.Markdown("# **SAM-Audio** 🔊")
     gr.Markdown("Segment and isolate sounds using **Text**, **Visual**, or **Time-based** prompts.")
 
