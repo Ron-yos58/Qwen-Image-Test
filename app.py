@@ -5,8 +5,6 @@ import numpy as np
 import os
 import tempfile
 import spaces
-import pandas as pd
-from typing import Optional
 
 # ---------------------------------------------------------
 # Import Custom Libraries
@@ -18,58 +16,52 @@ try:
     from sam3.model_builder import build_sam3_video_predictor
 except ImportError as e:
     print(f"Warning: Essential libraries (sam_audio, sam3, torchcodec) not found. {e}")
-    SAMAudio = None
-    SAMAudioProcessor = None
-    build_sam3_video_predictor = None
 
 # ---------------------------------------------------------
 # Constants & Configuration
 # ---------------------------------------------------------
 MODEL_ID = "facebook/sam-audio-large"
-DEFAULT_CHUNK_DURATION = 30.0  # seconds
-OVERLAP_DURATION = 2.0         # seconds
-MAX_DURATION_WITHOUT_CHUNKING = 30.0 # seconds
-
+DEFAULT_CHUNK_DURATION = 30.0  # Process 30 seconds at a time
+OVERLAP_DURATION = 2.0         # 2 seconds overlap for crossfading
+MAX_DURATION_WITHOUT_CHUNKING = 45.0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ---------------------------------------------------------
-# Direct Model Loading (No Lazy Loading)
+# Global Model Loading
 # ---------------------------------------------------------
-print(f"----------------------------------------------------------------")
-print(f"Initializing Models on {device}...")
-print(f"----------------------------------------------------------------")
+print(f"Loading {MODEL_ID} on {device}...")
+model = None
+processor = None
+video_predictor = None
 
-# 1. Load SAM-Audio
-print(f"Loading {MODEL_ID}...")
-try:
-    model = SAMAudio.from_pretrained(MODEL_ID).to(device).eval()
-    processor = SAMAudioProcessor.from_pretrained(MODEL_ID)
-    print("✅ SAM-Audio loaded successfully.")
-except Exception as e:
-    print(f"❌ Error loading SAM-Audio: {e}")
-    model = None
-    processor = None
+def load_models():
+    global model, processor
+    if model is None:
+        try:
+            model = SAMAudio.from_pretrained(MODEL_ID).to(device).eval()
+            processor = SAMAudioProcessor.from_pretrained(MODEL_ID)
+            print("✅ SAM-Audio loaded successfully.")
+        except Exception as e:
+            print(f"❌ Error loading SAM-Audio: {e}")
 
-# 2. Load SAM3 (Visual Predictor)
-print("Loading SAM3 Video Predictor...")
-try:
-    video_predictor = build_sam3_video_predictor()
-    print("✅ SAM3 loaded successfully.")
-except Exception as e:
-    print(f"❌ Error loading SAM3: {e}")
-    video_predictor = None
+def get_sam3_predictor():
+    global video_predictor
+    if video_predictor is None:
+        print("⏳ Loading SAM3 Video Predictor...")
+        video_predictor = build_sam3_video_predictor()
+        print("✅ SAM3 loaded.")
+    return video_predictor
 
-print(f"----------------------------------------------------------------")
-print(f"All models initialized.")
-print(f"----------------------------------------------------------------")
+# Load audio model on startup
+load_models()
 
 # ---------------------------------------------------------
-# Audio Processing Helpers (Chunking & Merging)
+# Robust Audio Helpers (Chunking & Merging)
 # ---------------------------------------------------------
 def load_audio(file_path):
     """Load audio from file (supports both audio and video files)."""
     waveform, sample_rate = torchaudio.load(file_path)
-    # Convert to mono if stereo
+    # Convert to mono if stereo for consistency
     if waveform.shape[0] > 1:
         waveform = waveform.mean(dim=0, keepdim=True)
     return waveform, sample_rate
@@ -99,7 +91,6 @@ def merge_chunks_with_crossfade(chunks, sample_rate, overlap_duration):
     """Merge audio chunks with crossfade on overlapping regions."""
     if len(chunks) == 1:
         chunk = chunks[0]
-        # Ensure 2D tensor
         if chunk.dim() == 1:
             chunk = chunk.unsqueeze(0)
         return chunk
@@ -123,7 +114,6 @@ def merge_chunks_with_crossfade(chunks, sample_rate, overlap_duration):
         actual_overlap = min(overlap_samples, prev_chunk.shape[1], next_chunk.shape[1])
         
         if actual_overlap <= 0:
-            # No overlap possible, just concatenate
             result = torch.cat([prev_chunk, next_chunk], dim=1)
             continue
         
@@ -138,7 +128,7 @@ def merge_chunks_with_crossfade(chunks, sample_rate, overlap_duration):
         # Crossfade mix
         crossfaded = prev_overlap * fade_out + next_overlap * fade_in
         
-        # Concatenate: non-overlap of prev + crossfaded + non-overlap of next
+        # Concatenate
         result = torch.cat([
             prev_chunk[:, :-actual_overlap],
             crossfaded,
@@ -147,31 +137,26 @@ def merge_chunks_with_crossfade(chunks, sample_rate, overlap_duration):
     
     return result
 
-def save_audio_temp(tensor, sample_rate):
+def save_audio(tensor, sample_rate):
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         torchaudio.save(tmp.name, tensor, sample_rate)
         return tmp.name
 
 # ---------------------------------------------------------
-# Tab 1: Text Prompting (with Chunking)
+# Tab 1: Text Prompting (With Robust Chunking)
 # ---------------------------------------------------------
 @spaces.GPU(duration=120)
-def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_DURATION, progress=gr.Progress()):
-    global model, processor
-    
-    progress(0.05, desc="Checking inputs...")
-    
-    if model is None or processor is None:
-        return None, None, "❌ Model failed to load at startup. Check logs."
-
-    if not file_path:
+def process_text_prompting(audio_file, description, progress=gr.Progress()):
+    if not audio_file:
         return None, None, "❌ Please upload an audio or video file."
-    if not text_prompt or not text_prompt.strip():
+    if not description or not description.strip():
         return None, None, "❌ Please enter a text prompt."
+
+    load_models() # Ensure model is loaded
     
     try:
-        progress(0.15, desc="Loading audio...")
-        waveform, sample_rate = load_audio(file_path)
+        progress(0.1, desc="Loading audio...")
+        waveform, sample_rate = load_audio(audio_file)
         duration = waveform.shape[1] / sample_rate
         
         # Decide whether to use chunking
@@ -179,7 +164,7 @@ def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_
         
         if use_chunking:
             progress(0.2, desc=f"Audio is {duration:.1f}s, splitting into chunks...")
-            chunks = split_audio_into_chunks(waveform, sample_rate, chunk_duration, OVERLAP_DURATION)
+            chunks = split_audio_into_chunks(waveform, sample_rate, DEFAULT_CHUNK_DURATION, OVERLAP_DURATION)
             num_chunks = len(chunks)
             
             target_chunks = []
@@ -189,14 +174,16 @@ def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_
                 chunk_progress = 0.2 + (i / num_chunks) * 0.6
                 progress(chunk_progress, desc=f"Processing chunk {i+1}/{num_chunks}...")
                 
+                # Save chunk to temp file for processor
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                     torchaudio.save(tmp.name, chunk, sample_rate)
                     chunk_path = tmp.name
                 
                 try:
-                    inputs = processor(audios=[chunk_path], descriptions=[text_prompt.strip()]).to(device)
+                    inputs = processor(audios=[chunk_path], descriptions=[description.strip()]).to(device)
                     with torch.inference_mode():
-                        result = model.separate(inputs, predict_spans=False, reranking_candidates=1)
+                        result = model.separate(inputs, predict_spans=True, reranking_candidates=1)
+                    
                     target_chunks.append(result.target[0].cpu())
                     residual_chunks.append(result.residual[0].cpu())
                 finally:
@@ -208,25 +195,27 @@ def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_
             residual_merged = merge_chunks_with_crossfade(residual_chunks, sample_rate, OVERLAP_DURATION)
             
             progress(0.95, desc="Saving results...")
-            target_path = save_audio_temp(target_merged, sample_rate)
-            residual_path = save_audio_temp(residual_merged, sample_rate)
+            target_path = save_audio(target_merged, sample_rate)
+            residual_path = save_audio(residual_merged, sample_rate)
             
-            return target_path, residual_path, f"✅ Isolated '{text_prompt}' ({num_chunks} chunks)"
+            progress(1.0, desc="Done!")
+            return target_path, residual_path, f"✅ Isolated '{description}' ({num_chunks} chunks processed)."
+        
         else:
-            # Process without chunking
+            # Process short audio directly
             progress(0.3, desc="Processing audio...")
-            inputs = processor(audios=[file_path], descriptions=[text_prompt.strip()]).to(device)
+            inputs = processor(audios=[audio_file], descriptions=[description.strip()]).to(device)
             
             progress(0.6, desc="Separating sounds...")
             with torch.inference_mode():
-                result = model.separate(inputs, predict_spans=False, reranking_candidates=1)
+                result = model.separate(inputs, predict_spans=True)
             
             progress(0.9, desc="Saving results...")
             sr = processor.audio_sampling_rate
-            target_path = save_audio_temp(result.target[0].unsqueeze(0).cpu(), sr)
-            residual_path = save_audio_temp(result.residual[0].unsqueeze(0).cpu(), sr)
+            target_path = save_audio(result.target[0].unsqueeze(0).cpu(), sr)
+            residual_path = save_audio(result.residual[0].unsqueeze(0).cpu(), sr)
             
-            return target_path, residual_path, f"✅ Isolated '{text_prompt}'"
+            return target_path, residual_path, f"✅ Isolated '{description}' successfully."
 
     except Exception as e:
         import traceback
@@ -234,40 +223,47 @@ def process_text_prompting(file_path, text_prompt, chunk_duration=DEFAULT_CHUNK_
         return None, None, f"❌ Error: {str(e)}"
 
 # ---------------------------------------------------------
-# Tab 2: Visual Prompting
+# Tab 2: Visual Prompting (Standard Logic)
 # ---------------------------------------------------------
 @spaces.GPU(duration=180)
 def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progress()):
-    global model, processor, video_predictor
+    if video_file is None:
+        return None, None, "❌ Please upload a video."
+    if not visual_prompt_text:
+        return None, None, "❌ Please describe the visual object."
 
-    if model is None or video_predictor is None:
-         return None, None, "❌ Models failed to load at startup. Check logs."
-
-    if video_file is None or not visual_prompt_text:
-        return None, None, "❌ Please provide both a video and a description."
+    load_models()
     
     try:
         progress(0.1, desc="Initializing Video Decoder...")
         decoder = VideoDecoder(video_file)
-        frames = decoder[:]
         
-        progress(0.2, desc="Starting SAM3 Session...")
-        response = video_predictor.handle_request({
+        # Check duration warning
+        if len(decoder) > 300: # Approx 10 seconds at 30fps
+             print("Warning: Video is long. Visual prompting consumes significant VRAM.")
+
+        frames = decoder[:] # Get all frames
+        
+        progress(0.2, desc="Generating Masks with SAM3...")
+        predictor = get_sam3_predictor()
+        
+        # Start SAM3 Session
+        response = predictor.handle_request({
             "type": "start_session",
             "resource_path": video_file,
         })
         session_id = response["session_id"]
-
-        progress(0.3, desc=f"Generating masks for {len(decoder)} frames...")
-        masks = []
-        step = 1 
-        total_frames = len(decoder)
         
-        for frame_index in range(0, total_frames, step):
+        masks = []
+        # Generate masks for every frame
+        # (Optimization: SAM3 can track, but for simplicity/robustness we prompt per frame or use internal tracking if implemented in `video_predictor` properly. 
+        # Here we follow standard snippet logic)
+        total_frames = len(decoder)
+        for frame_index in range(total_frames):
             if frame_index % 10 == 0:
-                progress(0.3 + (frame_index/total_frames)*0.4, desc=f"Masking frame {frame_index}/{total_frames}")
+                progress(0.2 + (frame_index / total_frames) * 0.3, desc=f"Masking frame {frame_index}/{total_frames}...")
             
-            response = video_predictor.handle_request({
+            response = predictor.handle_request({
                 "type": "add_prompt",
                 "session_id": session_id,
                 "frame_index": frame_index,
@@ -277,89 +273,18 @@ def process_visual_prompting(video_file, visual_prompt_text, progress=gr.Progres
             
             if mask.shape[0] == 0:
                 mask = np.zeros_like(frames[0, [0]], dtype=bool)
-            masks.append(mask[:1]) 
+            masks.append(mask[:1]) # Take first mask
 
+        # Prepare mask tensor
         final_mask = torch.from_numpy(np.concatenate(masks)).unsqueeze(1)
-
-        progress(0.8, desc="Separating Audio with SAM-Audio...")
+        
+        progress(0.6, desc="Separating Audio with SAM-Audio...")
+        # Note: We don't chunk here because visual masks + audio chunking alignment is complex.
+        # We process the file as a single block.
         inputs = processor(
             audios=[video_file],
-            descriptions=[""], 
+            descriptions=[""], # Empty text description, relying on mask
             masked_videos=processor.mask_videos([frames], [final_mask]),
-        ).to(device)
-
-        with torch.inference_mode():
-            result = model.separate(inputs)
-
-        progress(0.95, desc="Saving results...")
-        sr = processor.audio_sampling_rate
-        target_path = save_audio_temp(result.target[0].unsqueeze(0).cpu(), sr)
-        residual_path = save_audio_temp(result.residual[0].unsqueeze(0).cpu(), sr)
-
-        return target_path, residual_path, f"✅ Isolated object: '{visual_prompt_text}'"
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return None, None, f"❌ Error: {str(e)}"
-
-# ---------------------------------------------------------
-# Tab 3: Span Prompting (Temporal Anchors)
-# ---------------------------------------------------------
-@spaces.GPU(duration=120)
-def process_span_prompting(audio_file, description, anchors_df, progress=gr.Progress()):
-    global model, processor
-    
-    if model is None:
-        return None, None, "❌ Model not loaded."
-    if audio_file is None:
-        return None, None, "❌ Please upload an audio file."
-    
-    try:
-        progress(0.1, desc="Parsing anchors...")
-        # Parse Dataframe to List: [["+", 6.3, 7.0], ...]
-        formatted_anchors = []
-        
-        # Validating anchors_df (it usually comes as a list of lists from Gradio Dataframe)
-        if anchors_df is not None:
-            # Handle standard list of lists
-            if isinstance(anchors_df, list):
-                iterable = anchors_df
-            # Handle pandas DataFrame if Gradio returns that (depends on config)
-            elif hasattr(anchors_df, "values"):
-                iterable = anchors_df.values.tolist()
-            else:
-                iterable = []
-
-            for row in iterable:
-                # row structure: [Type, Start, End]
-                # Ensure we have data
-                if len(row) >= 3 and row[0] and row[1] is not None and row[2] is not None:
-                    # Validate Type
-                    anc_type = str(row[0]).strip()
-                    if anc_type not in ["+", "-"]:
-                        continue # Skip invalid rows
-                    
-                    try:
-                        start_t = float(row[1])
-                        end_t = float(row[2])
-                        formatted_anchors.append([anc_type, start_t, end_t])
-                    except ValueError:
-                        continue # Skip if numbers aren't valid
-        
-        if not formatted_anchors:
-            return None, None, "❌ No valid anchors provided. Use '+' or '-' and valid time numbers."
-        
-        print(f"Anchors: {formatted_anchors}")
-
-        progress(0.3, desc="Processing with Anchors...")
-        
-        # Note: We do NOT use chunking here because anchors rely on absolute timestamps 
-        # of the original file.
-        inputs = processor(
-            audios=[audio_file],
-            descriptions=[description if description else "Sound"], # Desc can be generic if anchors are strong
-            anchors=[formatted_anchors],
         ).to(device)
 
         with torch.inference_mode():
@@ -367,10 +292,10 @@ def process_span_prompting(audio_file, description, anchors_df, progress=gr.Prog
 
         progress(0.9, desc="Saving results...")
         sr = processor.audio_sampling_rate
-        target_path = save_audio_temp(result.target[0].unsqueeze(0).cpu(), sr)
-        residual_path = save_audio_temp(result.residual[0].unsqueeze(0).cpu(), sr)
+        target_path = save_audio(result.target[0].unsqueeze(0).cpu(), sr)
+        residual_path = save_audio(result.residual[0].unsqueeze(0).cpu(), sr)
 
-        return target_path, residual_path, f"✅ Processed with {len(formatted_anchors)} anchors."
+        return target_path, residual_path, f"✅ Isolated sound for visual object: '{visual_prompt_text}'"
 
     except Exception as e:
         import traceback
@@ -380,84 +305,50 @@ def process_span_prompting(audio_file, description, anchors_df, progress=gr.Prog
 # ---------------------------------------------------------
 # Gradio Interface
 # ---------------------------------------------------------
-
 with gr.Blocks() as demo:
-    gr.Markdown("# **SAM-Audio** 🔊")
-    gr.Markdown("Segment and isolate sounds using **Text**, **Visual**, or **Time-based** prompts.")
+    gr.Markdown("# **SAM-Audio** 🔊", elem_id="main-title")
+    gr.Markdown("Segment and isolate sounds using **Text Descriptions** or **Visual Cues**.")
 
     with gr.Tabs():
-        # ================= TAB 1: TEXT =================
+        # ================= TAB 1: Text =================
         with gr.Tab("Text Prompting"):
             gr.Markdown("### Isolate sound using a text description")
-            
             with gr.Row():
                 with gr.Column():
                     t1_input = gr.Audio(label="Input Audio/Video", type="filepath")
                     t1_desc = gr.Textbox(label="Description", placeholder="e.g., 'A man speaking', 'Glass breaking'")
-                    t1_chunk = gr.Slider(minimum=10, maximum=60, value=30, step=5, label="Chunk Duration (s)", info="Split long audio into chunks.")
                     t1_btn = gr.Button("Separate Audio", variant="primary")
                 
-                with gr.Column(scale=1):
+                with gr.Column():
                     t1_status = gr.Textbox(label="Status", interactive=False)
-                    t1_target = gr.Audio(label="Target Audio", type="filepath")
-                    t1_residual = gr.Audio(label="Residual Audio", type="filepath")
+                    t1_out_target = gr.Audio(label="Target Audio (Isolated)", type="filepath")
+                    t1_out_residual = gr.Audio(label="Residual Audio (Background)", type="filepath")
             
             t1_btn.click(
                 fn=process_text_prompting,
-                inputs=[t1_input, t1_desc, t1_chunk],
-                outputs=[t1_target, t1_residual, t1_status]
+                inputs=[t1_input, t1_desc],
+                outputs=[t1_out_target, t1_out_residual, t1_status]
             )
 
-        # ================= TAB 2: VISUAL =================
+        # ================= TAB 2: Visual =================
         with gr.Tab("Visual Prompting"):
             gr.Markdown("### Isolate sound corresponding to a visual object")
-            
+            gr.Markdown("**Note:** Visual prompting uses SAM3 to generate masks. Processing long videos may be slow.")
             with gr.Row():
                 with gr.Column():
                     t2_input = gr.Video(label="Input Video", format="mp4")
-                    t2_visual_desc = gr.Textbox(label="Visual Object Description", placeholder="e.g., 'The person on the left'")
+                    t2_prompt = gr.Textbox(label="Visual Object Description", placeholder="e.g., 'The person on the left', 'The red car'")
                     t2_btn = gr.Button("Generate Mask & Separate", variant="primary")
                 
-                with gr.Column(scale=1):
+                with gr.Column():
                     t2_status = gr.Textbox(label="Status", interactive=False)
-                    t2_target = gr.Audio(label="Target Audio", type="filepath")
-                    t2_residual = gr.Audio(label="Residual Audio", type="filepath")
+                    t2_out_target = gr.Audio(label="Target Audio", type="filepath")
+                    t2_out_residual = gr.Audio(label="Residual Audio", type="filepath")
 
             t2_btn.click(
                 fn=process_visual_prompting,
-                inputs=[t2_input, t2_visual_desc],
-                outputs=[t2_target, t2_residual, t2_status]
-            )
-
-        # ================= TAB 3: SPAN =================
-        with gr.Tab("Span Prompting"):
-            gr.Markdown("### Isolate sound using Temporal Anchors (Time Ranges)")
-            gr.Markdown("Specify when a sound **IS (+)** or **IS NOT (-)** present.")
-            
-            with gr.Row():
-                with gr.Column():
-                    t3_input = gr.Audio(label="Input Audio", type="filepath")
-                    t3_desc = gr.Textbox(label="Description (Optional)", placeholder="e.g. 'A horn honking'")
-                    
-                    t3_anchors = gr.Dataframe(
-                        headers=["Type (+/-)", "Start (s)", "End (s)"],
-                        datatype=["str", "number", "number"],
-                        row_count=3,
-                        col_count=(3, "fixed"),
-                        label="Temporal Anchors",
-                        value=[["+", 0.0, 5.0], ["-", 5.0, 10.0], ["", None, None]]
-                    )
-                    t3_btn = gr.Button("Separate with Anchors", variant="primary")
-                
-                with gr.Column(scale=1):
-                    t3_status = gr.Textbox(label="Status", interactive=False)
-                    t3_target = gr.Audio(label="Target Audio", type="filepath")
-                    t3_residual = gr.Audio(label="Residual Audio", type="filepath")
-
-            t3_btn.click(
-                fn=process_span_prompting,
-                inputs=[t3_input, t3_desc, t3_anchors],
-                outputs=[t3_target, t3_residual, t3_status]
+                inputs=[t2_input, t2_prompt],
+                outputs=[t2_out_target, t2_out_residual, t2_status]
             )
 
 if __name__ == "__main__":
@@ -465,4 +356,4 @@ if __name__ == "__main__":
             primary_hue="blue",
             secondary_hue="indigo",
             neutral_hue="slate",
-        ), mcp_server=True, ssr_mode=False)
+        ), css=css, mcp_server=True, ssr_mode=False)
