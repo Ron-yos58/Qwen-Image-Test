@@ -1,4 +1,5 @@
 import gradio as gr
+import spaces
 import torch
 import torchaudio
 import numpy as np
@@ -41,6 +42,7 @@ def save_audio(tensor, sr, prefix="out"):
 # ==========================================
 # 1. Text Prompting Logic
 # ==========================================
+@spaces.GPU
 def process_text_prompt(audio_path, description, reranking_candidates):
     if not model:
         return None, None
@@ -69,6 +71,7 @@ def process_text_prompt(audio_path, description, reranking_candidates):
 # ==========================================
 # 2. Visual Prompting Logic
 # ==========================================
+@spaces.GPU
 def process_visual_prompt(video_path, text_prompt_for_mask):
     if not model:
         return None, None
@@ -137,6 +140,7 @@ def process_visual_prompt(video_path, text_prompt_for_mask):
 # ==========================================
 # 3. Span Prompting Logic
 # ==========================================
+@spaces.GPU
 def process_span_prompt(audio_path, description, anchors_text):
     if not model:
         return None, None
