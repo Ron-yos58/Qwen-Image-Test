@@ -1,6 +1,6 @@
 ---
 title: SAM Audio Demo
-emoji: 🙊
+emoji: 🎃
 colorFrom: indigo
 colorTo: gray
 sdk: gradio
