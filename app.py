@@ -401,7 +401,7 @@ with gr.Blocks(css=css) as demo:
                     t1_chunk = gr.Slider(minimum=10, maximum=60, value=30, step=5, label="Chunk Duration (s)", info="Split long audio into chunks.")
                     t1_btn = gr.Button("Separate Audio", variant="primary")
                 
-                with gr.Column():
+                with gr.Column(scale=2):
                     t1_status = gr.Textbox(label="Status", interactive=False)
                     t1_target = gr.Audio(label="Target Audio", type="filepath")
                     t1_residual = gr.Audio(label="Residual Audio", type="filepath")
@@ -422,7 +422,7 @@ with gr.Blocks(css=css) as demo:
                     t2_visual_desc = gr.Textbox(label="Visual Object Description", placeholder="e.g., 'The person on the left'")
                     t2_btn = gr.Button("Generate Mask & Separate", variant="primary")
                 
-                with gr.Column():
+                with gr.Column(scale=2):
                     t2_status = gr.Textbox(label="Status", interactive=False)
                     t2_target = gr.Audio(label="Target Audio", type="filepath")
                     t2_residual = gr.Audio(label="Residual Audio", type="filepath")
@@ -453,7 +453,7 @@ with gr.Blocks(css=css) as demo:
                     )
                     t3_btn = gr.Button("Separate with Anchors", variant="primary")
                 
-                with gr.Column():
+                with gr.Column(scale=2):
                     t3_status = gr.Textbox(label="Status", interactive=False)
                     t3_target = gr.Audio(label="Target Audio", type="filepath")
                     t3_residual = gr.Audio(label="Residual Audio", type="filepath")
