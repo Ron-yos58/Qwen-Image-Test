@@ -200,7 +200,7 @@ css = """
 
 with gr.Blocks() as demo:
     gr.Markdown("# **SAM-Audio-Demo**", elem_id="main-title")
-    gr.Markdown("Segment and isolate specific sounds from audio or video files using natural language descriptions, powered by [SAM-Audio-Large](https://huggingface.co/facebook/sam-audio-large).")
+    gr.Markdown("Segment and isolate specific sounds from audio files using natural language descriptions, powered by [SAM-Audio-Large](https://huggingface.co/facebook/sam-audio-large).")
 
     with gr.Column(elem_id="col-container"):
         with gr.Row():
@@ -208,7 +208,7 @@ with gr.Blocks() as demo:
                 input_file = gr.Audio(label="Input Audio", type="filepath")
                 text_prompt = gr.Textbox(label="Sound to Isolate", placeholder="e.g., 'A man speaking', 'Bird chirping'")
 
-                with gr.Accordion("Advanced Settings", open=False):
+                with gr.Accordion("Advanced Settings", open=True):
                     chunk_duration_slider = gr.Slider(
                         minimum=10, maximum=60, value=30, step=5,
                         label="Chunk Duration (seconds)",
@@ -220,12 +220,13 @@ with gr.Blocks() as demo:
             with gr.Column(scale=1):
                 output_target = gr.Audio(label="Isolated Sound (Target)", type="filepath")
                 output_residual = gr.Audio(label="Background (Residual)", type="filepath")
-                status_out = gr.Textbox(label="Status", interactive=False, show_label=True, lines=8)
+                status_out = gr.Textbox(label="Status", interactive=False, show_label=True, lines=6)
 
         gr.Examples(
             examples=[
-                ["example_audio/speech.wav", "A man speaking", 30],
-                ["example_audio/nature.wav", "Birds chirping", 30]
+                ["example_audio/speech.mp3", "Vocal", 30],
+                ["example_audio/song.mp3", "Drum", 30],
+                ["example_audio/song2.mp3", "Vocal", 30],
             ],
             inputs=[input_file, text_prompt, chunk_duration_slider],
             label="Audio Examples"
