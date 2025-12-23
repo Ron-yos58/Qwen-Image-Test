@@ -118,10 +118,10 @@ except Exception as e:
 MAX_SEED = np.iinfo(np.int32).max
 
 ADAPTER_SPECS = {
-    "Photo-to-Anime": {
-        "repo": "autoweeb/Qwen-Image-Edit-2509-Photo-to-Anime",
-        "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
-        "adapter_name": "anime"
+    "Multiple-Angles": {
+        "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
+        "weights": "镜头转换.safetensors",
+        "adapter_name": "multiple-angles"
     }
 }
 
@@ -258,7 +258,7 @@ with gr.Blocks() as demo:
                     lora_adapter = gr.Dropdown(
                         label="Choose Editing Style",
                         choices=list(ADAPTER_SPECS.keys()),
-                        value="Photo-to-Anime"
+                        value="Multiple-Angles"
                     )
                 with gr.Accordion("Advanced Settings", open=False, visible=False):
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
@@ -268,7 +268,7 @@ with gr.Blocks() as demo:
         
         gr.Examples(
             examples=[
-                ["examples/1.jpg", "Transform into anime.", "Photo-to-Anime"],
+                ["examples/A.jpg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[input_image, prompt, lora_adapter],
             outputs=[output_image, seed],
