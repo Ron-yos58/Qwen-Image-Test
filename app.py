@@ -10,10 +10,6 @@ from typing import Iterable
 from gradio.themes import Soft
 from gradio.themes.utils import colors, fonts, sizes
 
-# =========================================
-# THEME CONFIGURATION
-# =========================================
-
 colors.orange_red = colors.Color(
     name="orange_red",
     c50="#FFF0E5",
@@ -82,10 +78,6 @@ class OrangeRedTheme(Soft):
 
 orange_red_theme = OrangeRedTheme()
 
-# =========================================
-# SYSTEM INFO
-# =========================================
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
@@ -106,16 +98,10 @@ from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
 dtype = torch.bfloat16
 
-# =========================================
-# PIPELINE SETUP
-# =========================================
-
-# 1. Load the New 2511 Model and Transformer
-print("Loading Qwen-Image-Edit-2511 Pipeline...")
 pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2511",
     transformer=QwenImageTransformer2DModel.from_pretrained(
-        "linoyts/Qwen-Image-Edit-2511-Fast",
+        "linoyts/Qwen-Image-Edit-Rapid-AIO",
         subfolder='transformer',
         torch_dtype=dtype,
         device_map='cuda'
@@ -123,33 +109,14 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
     torch_dtype=dtype
 ).to(device)
 
-# 2. Apply FA3 Optimization
 try:
     pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
     print("Flash Attention 3 Processor set successfully.")
 except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
-# 3. Load and Fuse Lightning (2511 Version) for Base 4-Step Performance
-print("Loading and Fusing 2511-Lightning LoRA...")
-try:
-    pipe.load_lora_weights(
-        "lightx2v/Qwen-Image-Edit-2511-Lightning",
-        weight_name="Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
-        adapter_name="lightning"
-    )
-    pipe.fuse_lora(adapter_names=["lightning"], lora_scale=1.0)
-    print("Lightning LoRA fused.")
-except Exception as e:
-    print(f"Warning: Could not load Lightning LoRA: {e}")
-
 MAX_SEED = np.iinfo(np.int32).max
 
-# =========================================
-# LAZY LOADING CONFIGURATION
-# =========================================
-
-# Only "Photo-to-Anime" is requested as an extra adapter.
 ADAPTER_SPECS = {
     "Photo-to-Anime": {
         "repo": "autoweeb/Qwen-Image-Edit-2509-Photo-to-Anime",
@@ -158,12 +125,7 @@ ADAPTER_SPECS = {
     }
 }
 
-# Track loaded adapters
 LOADED_ADAPTERS = set()
-
-# =========================================
-# HELPER FUNCTIONS
-# =========================================
 
 def update_dimensions_on_upload(image):
     if image is None:
@@ -180,7 +142,6 @@ def update_dimensions_on_upload(image):
         aspect_ratio = original_width / original_height
         new_width = int(new_height * aspect_ratio)
         
-    # Ensure dimensions are multiples of 8
     new_width = (new_width // 8) * 8
     new_height = (new_height // 8) * 8
     
@@ -197,24 +158,16 @@ def infer(
     steps,
     progress=gr.Progress(track_tqdm=True)
 ):
-    # Cleanup memory
     gc.collect()
     torch.cuda.empty_cache()
 
     if input_image is None:
         raise gr.Error("Please upload an image to edit.")
 
-    # ==========================
-    # Adapter Logic
-    # ==========================
-    
     if lora_adapter == "Base Model":
-        # Lightning is already fused. We just disable any other active adapters.
+        print("--- Using Base Model (No Adapters) ---")
         pipe.set_adapters([], adapter_weights=[])
-        print("--- Using Base Model (Lightning Fused) ---")
-        
     else:
-        # Load specific adapter (Lazy Load)
         spec = ADAPTER_SPECS.get(lora_adapter)
         if not spec:
             raise gr.Error(f"Configuration not found for: {lora_adapter}")
@@ -235,14 +188,8 @@ def infer(
         else:
             print(f"--- Adapter {lora_adapter} is already loaded. ---")
 
-        # Activate this adapter (Lightning remains fused in the background)
         pipe.set_adapters([adapter_name], adapter_weights=[1.0])
 
-
-    # ==========================
-    # Inference
-    # ==========================
-    
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
 
@@ -283,10 +230,6 @@ def infer_example(input_image, prompt, lora_adapter):
     result, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
     return result, seed
 
-# =========================================
-# UI CONSTRUCTION
-# =========================================
-
 css="""
 #col-container {
     margin: 0 auto;
@@ -297,8 +240,8 @@ css="""
 
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
-        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs**", elem_id="main-title")
-        gr.Markdown("Perform image edits using the **Qwen-Image-Edit-2511** model. Select **Base Model** for general edits (fast 4-step) or **Photo-to-Anime** for styling.")
+        gr.Markdown("# **Qwen-Image-Edit-2511-Fast**", elem_id="main-title")
+        gr.Markdown("Perform image edits using the **Qwen-Image-Edit-2511** model. Select 'Base Model' for standard edits or choose a LoRA style.")
 
         with gr.Row(equal_height=True):
             with gr.Column():
@@ -307,7 +250,7 @@ with gr.Blocks() as demo:
                 prompt = gr.Text(
                     label="Edit Prompt",
                     show_label=True,
-                    placeholder="e.g., make it snow, transform into anime...",
+                    placeholder="e.g., make it snowy...",
                 )
 
                 run_button = gr.Button("Edit Image", variant="primary")
@@ -316,12 +259,10 @@ with gr.Blocks() as demo:
                 output_image = gr.Image(label="Output Image", interactive=False, format="png", height=353)
                 
                 with gr.Row():
-                    # Choices: Base Model + keys from ADAPTER_SPECS
                     lora_adapter = gr.Dropdown(
                         label="Choose Editing Style",
-                        choices=["Base Model"] + list(ADAPTER_SPECS.keys()),
-                        value="Base Model", 
-                        interactive=True
+                        choices=["Base Model", "Photo-to-Anime"],
+                        value="Base Model"
                     )
                 with gr.Accordion("Advanced Settings", open=False, visible=False):
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
@@ -331,9 +272,8 @@ with gr.Blocks() as demo:
         
         gr.Examples(
             examples=[
+                ["examples/1.jpg", "Make it look like a winter scene.", "Base Model"],
                 ["examples/1.jpg", "Transform into anime.", "Photo-to-Anime"],
-                ["examples/5.jpg", "Make it snowy.", "Base Model"],
-                ["examples/4.jpg", "Turn this into a sunny day.", "Base Model"],
             ],
             inputs=[input_image, prompt, lora_adapter],
             outputs=[output_image, seed],
