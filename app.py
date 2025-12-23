@@ -10,6 +10,10 @@ from typing import Iterable
 from gradio.themes import Soft
 from gradio.themes.utils import colors, fonts, sizes
 
+# =========================================
+# THEME CONFIGURATION
+# =========================================
+
 colors.orange_red = colors.Color(
     name="orange_red",
     c50="#FFF0E5",
@@ -78,6 +82,10 @@ class OrangeRedTheme(Soft):
 
 orange_red_theme = OrangeRedTheme()
 
+# =========================================
+# SYSTEM INFO
+# =========================================
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
@@ -98,6 +106,11 @@ from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
 dtype = torch.bfloat16
 
+# =========================================
+# PIPELINE SETUP
+# =========================================
+
+# Loading the NEW model 2511
 pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2511",
     transformer=QwenImageTransformer2DModel.from_pretrained(
@@ -109,6 +122,7 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
     torch_dtype=dtype
 ).to(device)
 
+# Apply FA3 Optimization
 try:
     pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
     print("Flash Attention 3 Processor set successfully.")
@@ -116,6 +130,10 @@ except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
 MAX_SEED = np.iinfo(np.int32).max
+
+# =========================================
+# LAZY LOADING CONFIGURATION
+# =========================================
 
 ADAPTER_SPECS = {
     "Photo-to-Anime": {
@@ -125,7 +143,12 @@ ADAPTER_SPECS = {
     }
 }
 
+# Track loaded adapters
 LOADED_ADAPTERS = set()
+
+# =========================================
+# HELPER FUNCTIONS
+# =========================================
 
 def update_dimensions_on_upload(image):
     if image is None:
@@ -142,6 +165,7 @@ def update_dimensions_on_upload(image):
         aspect_ratio = original_width / original_height
         new_width = int(new_height * aspect_ratio)
         
+    # Ensure dimensions are multiples of 8
     new_width = (new_width // 8) * 8
     new_height = (new_height // 8) * 8
     
@@ -158,6 +182,7 @@ def infer(
     steps,
     progress=gr.Progress(track_tqdm=True)
 ):
+    # Cleanup memory before starting
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -166,14 +191,19 @@ def infer(
 
     if lora_adapter == "Base Model":
         print("--- Using Base Model (No Adapters) ---")
-        pipe.set_adapters([], adapter_weights=[])
+        # FIX: Only unset adapters if they have been loaded previously.
+        # calling set_adapters on a fresh pipeline causes KeyError: 'transformer'
+        if len(LOADED_ADAPTERS) > 0:
+            pipe.set_adapters([], adapter_weights=[])
     else:
+        # Get Config for Selected Adapter
         spec = ADAPTER_SPECS.get(lora_adapter)
         if not spec:
             raise gr.Error(f"Configuration not found for: {lora_adapter}")
 
         adapter_name = spec["adapter_name"]
 
+        # Lazy Loading Logic
         if adapter_name not in LOADED_ADAPTERS:
             print(f"--- Downloading and Loading Adapter: {lora_adapter} ---")
             try:
@@ -188,8 +218,10 @@ def infer(
         else:
             print(f"--- Adapter {lora_adapter} is already loaded. ---")
 
+        # Activate the specific adapter
         pipe.set_adapters([adapter_name], adapter_weights=[1.0])
 
+    # Standard Inference Setup
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
 
@@ -216,6 +248,7 @@ def infer(
     except Exception as e:
         raise e
     finally:
+        # Cleanup
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -229,6 +262,10 @@ def infer_example(input_image, prompt, lora_adapter):
     steps = 4
     result, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
     return result, seed
+
+# =========================================
+# UI CONSTRUCTION
+# =========================================
 
 css="""
 #col-container {
