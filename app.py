@@ -276,6 +276,8 @@ with gr.Blocks() as demo:
             cache_examples=False,
             label="Examples"
         )
+        
+        gr.Markdown("This is still an experimental Space for Qwen-Image-Edit-2511; you can use [Qwen-Image-Edit-2509-LoRAs-Fast](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2509-LoRAs-Fast) instead. This Space will be updated soon.")
 
     run_button.click(
         fn=infer,
