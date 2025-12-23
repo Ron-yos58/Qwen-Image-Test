@@ -80,10 +80,6 @@ orange_red_theme = OrangeRedTheme()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
-print("torch.__version__ =", torch.__version__)
-print("torch.version.cuda =", torch.version.cuda)
-print("cuda available:", torch.cuda.is_available())
 print("Using device:", device)
 
 from diffusers import FlowMatchEulerDiscreteScheduler
@@ -105,14 +101,28 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
 ).to(device)
 
 try:
-    pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
-    print("Flash Attention 3 Processor set successfully.")
+    pipe.enable_vae_tiling()
 except Exception as e:
-    print(f"Warning: Could not set FA3 processor: {e}")
+    print(f"VAE Tiling warning: {e}")
+
+pipe.load_lora_weights("lightx2v/Qwen-Image-Lightning",
+                       weight_name="Qwen-Image-Lightning-4steps-V2.0-bf16.safetensors",
+                       adapter_name="lightning")
+pipe.fuse_lora(adapter_names=["lightning"], lora_scale=1.0)
+
+try:
+    pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
+except Exception as e:
+    print(f"FA3 Warning: {e}")
 
 MAX_SEED = np.iinfo(np.int32).max
 
 ADAPTER_SPECS = {
+    "Base Model": {
+        "repo": None,
+        "weights": None,
+        "adapter_name": "base"
+    },
     "Photo-to-Anime": {
         "repo": "autoweeb/Qwen-Image-Edit-2509-Photo-to-Anime",
         "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
@@ -159,15 +169,15 @@ def infer(
     if input_image is None:
         raise gr.Error("Please upload an image to edit.")
 
-    if lora_adapter == "Base Model":
+    spec = ADAPTER_SPECS.get(lora_adapter)
+    if not spec:
+        raise gr.Error(f"Configuration not found for: {lora_adapter}")
+
+    adapter_name = spec["adapter_name"]
+
+    if adapter_name == "base":
         pipe.set_adapters([], adapter_weights=[])
     else:
-        spec = ADAPTER_SPECS.get(lora_adapter)
-        if not spec:
-            raise gr.Error(f"Configuration not found for: {lora_adapter}")
-
-        adapter_name = spec["adapter_name"]
-
         if adapter_name not in LOADED_ADAPTERS:
             print(f"--- Downloading and Loading Adapter: {lora_adapter} ---")
             try:
@@ -179,9 +189,7 @@ def infer(
                 LOADED_ADAPTERS.add(adapter_name)
             except Exception as e:
                 raise gr.Error(f"Failed to load adapter {lora_adapter}: {e}")
-        else:
-            print(f"--- Adapter {lora_adapter} is already loaded. ---")
-
+        
         pipe.set_adapters([adapter_name], adapter_weights=[1.0])
 
     if randomize_seed:
@@ -234,8 +242,8 @@ css="""
 
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
-        gr.Markdown("# **Qwen-Image-Edit-2511-LoRA-Fast**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters for the [Qwen-Image-Edit](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) model.")
+        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
+        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2509) adapters for the [Qwen-Image-Edit](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) model.")
 
         with gr.Row(equal_height=True):
             with gr.Column():
@@ -253,10 +261,9 @@ with gr.Blocks() as demo:
                 output_image = gr.Image(label="Output Image", interactive=False, format="png", height=353)
                 
                 with gr.Row():
-                    choices_list = ["Base Model"] + list(ADAPTER_SPECS.keys())
                     lora_adapter = gr.Dropdown(
                         label="Choose Editing Style",
-                        choices=choices_list,
+                        choices=list(ADAPTER_SPECS.keys()),
                         value="Base Model"
                     )
                 with gr.Accordion("Advanced Settings", open=False, visible=False):
@@ -267,6 +274,7 @@ with gr.Blocks() as demo:
         
         gr.Examples(
             examples=[
+                ["examples/1.jpg", "Make it snowy.", "Base Model"],
                 ["examples/1.jpg", "Transform into anime.", "Photo-to-Anime"],
             ],
             inputs=[input_image, prompt, lora_adapter],
