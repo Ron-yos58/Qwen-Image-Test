@@ -147,7 +147,7 @@ def update_dimensions_on_upload(image):
     
     return new_width, new_height
 
-@spaces.GPU(duration=60)
+@spaces.GPU
 def infer(
     input_image,
     prompt,
@@ -215,7 +215,7 @@ def infer(
         gc.collect()
         torch.cuda.empty_cache()
 
-@spaces.GPU(duration=60)
+@spaces.GPU
 def infer_example(input_image, prompt, lora_adapter):
     if input_image is None:
         return None, 0
