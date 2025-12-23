@@ -268,7 +268,7 @@ with gr.Blocks() as demo:
         
         gr.Examples(
             examples=[
-                ["examples/A.jpg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
+                ["examples/A.jpeg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[input_image, prompt, lora_adapter],
             outputs=[output_image, seed],
