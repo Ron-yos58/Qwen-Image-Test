@@ -1,7 +1,7 @@
 ---
 title: Qwen-Image-Edit-2511-LoRAs-Fast
 emoji: 🎃
-colorFrom: red
+colorFrom: indigo
 colorTo: gray
 sdk: gradio
 sdk_version: 6.2.0
