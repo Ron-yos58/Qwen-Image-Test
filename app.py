@@ -236,7 +236,7 @@ css="""
 
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
-        gr.Markdown("# **Qwen-Image-Edit-2511-LoRA-Fast**", elem_id="main-title")
+        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
         gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters for the [Qwen-Image-Edit](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) model.")
 
         with gr.Row(equal_height=True):
