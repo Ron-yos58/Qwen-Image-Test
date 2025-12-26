@@ -130,7 +130,7 @@ ADAPTER_SPECS = {
     },
     "Any-Pose": {
         "repo": "lilylilith/AnyPose",
-        "weights": "2511-AnyPose-base-000006250.safetensors",
+        "weights": "2511-AnyPose-helper-00006000.safetensors",
         "adapter_name": "any-pose"
     },
 }
