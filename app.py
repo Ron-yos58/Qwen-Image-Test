@@ -16,27 +16,27 @@ from gradio.themes.utils import colors, fonts, sizes
 import rerun as rr
 from gradio_rerun import Rerun
 
-colors.deep_sky_blue = colors.Color(
-    name="deep_sky_blue",
-    c50="#E0F7FF",
-    c100="#B3EAFF",
-    c200="#80DFFF",
-    c300="#4DD2FF",
-    c400="#1AC6FF",
-    c500="#00BFFF",
-    c600="#0099CC",
-    c700="#007399",
-    c800="#004C66",
-    c900="#002633",
-    c950="#00131A",
+colors.orange_red = colors.Color(
+    name="orange_red",
+    c50="#FFF0E5",
+    c100="#FFE0CC",
+    c200="#FFC299",
+    c300="#FFA366",
+    c400="#FF8533",
+    c500="#FF4500",
+    c600="#E63E00",
+    c700="#CC3700",
+    c800="#B33000",
+    c900="#992900",
+    c950="#802200",
 )
 
-class DeepSkyBlueTheme(Soft):
+class OrangeRedTheme(Soft):
     def __init__(
         self,
         *,
         primary_hue: colors.Color | str = colors.gray,
-        secondary_hue: colors.Color | str = colors.deep_sky_blue,
+        secondary_hue: colors.Color | str = colors.orange_red,
         neutral_hue: colors.Color | str = colors.slate,
         text_size: sizes.Size | str = sizes.text_lg,
         font: fonts.Font | str | Iterable[fonts.Font | str] = (
@@ -57,7 +57,7 @@ class DeepSkyBlueTheme(Soft):
         super().set(
             background_fill_primary="*primary_50",
             background_fill_primary_dark="*primary_900",
-            body_background_fill="linear-gradient(135deg, *primary_100, #E0F7FF)",
+            body_background_fill="linear-gradient(135deg, *primary_200, *primary_100)",
             body_background_fill_dark="linear-gradient(135deg, *primary_900, *primary_800)",
             button_primary_text_color="white",
             button_primary_text_color_hover="white",
@@ -82,7 +82,7 @@ class DeepSkyBlueTheme(Soft):
             block_label_background_fill="*primary_200",
         )
 
-deep_sky_blue_theme = DeepSkyBlueTheme()
+orange_red_theme = OrangeRedTheme()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -267,7 +267,7 @@ css="""
     margin: 0 auto;
     max-width: 980px;
 }
-#main-title h1 {font-size: 2.3em !important;}
+#main-title h1 {font-size: 2.2em !important;}
 """
 
 with gr.Blocks() as demo:
@@ -328,4 +328,4 @@ with gr.Blocks() as demo:
     )
 
 if __name__ == "__main__":
-    demo.queue(max_size=30).launch(css=css, theme=deep_sky_blue_theme, mcp_server=True, ssr_mode=False, show_error=True)
+    demo.queue(max_size=30).launch(css=css, theme=orange_red_theme, mcp_server=True, ssr_mode=False, show_error=True)
