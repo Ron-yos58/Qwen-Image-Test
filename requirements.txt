@@ -3,9 +3,11 @@ git+https://github.com/huggingface/diffusers.git
 git+https://github.com/huggingface/peft.git
 transformers==4.57.3
 huggingface_hub
-sentencepiece 
+sentencepiece
+gradio-rerun
 torchvision
 supervision
+rerun-sdk
 kernels
 spaces
 hf_xet
