@@ -84,8 +84,11 @@ class OrangeRedTheme(Soft):
 
 orange_red_theme = OrangeRedTheme()
 
-# --- Hardware Setup ---
+# --- Model & Device Setup ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
+print("torch.__version__ =", torch.__version__)
 print("Using device:", device)
 
 from diffusers import FlowMatchEulerDiscreteScheduler
@@ -95,7 +98,6 @@ from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
 dtype = torch.bfloat16
 
-# --- Model Loading ---
 pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2511",
     transformer=QwenImageTransformer2DModel.from_pretrained(
@@ -117,7 +119,6 @@ MAX_SEED = np.iinfo(np.int32).max
 TMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp_rerun')
 os.makedirs(TMP_DIR, exist_ok=True)
 
-# --- Adapters ---
 ADAPTER_SPECS = {
     "Multiple-Angles": {
         "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
@@ -155,7 +156,7 @@ def update_dimensions_on_upload(image):
 
 @spaces.GPU
 def infer(
-    input_gallery,
+    images,
     prompt,
     lora_adapter,
     seed,
@@ -167,10 +168,36 @@ def infer(
     gc.collect()
     torch.cuda.empty_cache()
 
-    if not input_gallery:
+    if not images:
         raise gr.Error("Please upload at least one image to edit.")
 
-    # --- Adapter Loading ---
+    # --- Process Gallery Input ---
+    pil_images = []
+    if images is not None:
+        for item in images:
+            # Gradio Gallery returns a list of tuples (filepath, label) or (image, label) depending on version/type
+            try:
+                # Check for tuple (standard Gradio Gallery output)
+                if isinstance(item, tuple) or isinstance(item, list):
+                    path_or_img = item[0]
+                else:
+                    path_or_img = item
+
+                if isinstance(path_or_img, str):
+                    pil_images.append(Image.open(path_or_img).convert("RGB"))
+                elif isinstance(path_or_img, Image.Image):
+                    pil_images.append(path_or_img.convert("RGB"))
+                else:
+                    # Fallback for complex Gradio objects
+                    pil_images.append(Image.open(path_or_img.name).convert("RGB"))
+            except Exception as e:
+                print(f"Skipping invalid image item: {e}")
+                continue
+
+    if not pil_images:
+        raise gr.Error("Could not process uploaded images.")
+
+    # --- Load Adapter ---
     spec = ADAPTER_SPECS.get(lora_adapter)
     if not spec:
         raise gr.Error(f"Configuration not found for: {lora_adapter}")
@@ -193,107 +220,87 @@ def infer(
 
     pipe.set_adapters([adapter_name], adapter_weights=[1.0])
 
-    # --- Setup Rerun ---
-    run_id = str(uuid.uuid4())
-    if hasattr(rr, "new_recording"):
-        rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
-    elif hasattr(rr, "RecordingStream"):
-        rec = rr.RecordingStream(application_id="Qwen-Image-Edit", recording_id=run_id)
-    else:
-        rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
-        rec = rr
+    # --- Setup Generation ---
+    if randomize_seed:
+        seed = random.randint(0, MAX_SEED)
 
-    # --- Processing Loop ---
-    # gr.Gallery(type="pil") returns a list of tuples: [(PIL.Image, str_caption), ...]
-    # We iterate over them.
-    
-    total_images = len(input_gallery)
-    
-    for i, item in enumerate(input_gallery):
-        # Handle format: item might be (image, caption) tuple or just image depending on version/updates
-        if isinstance(item, (tuple, list)):
-            input_pil = item[0]
+    generator = torch.Generator(device=device).manual_seed(seed)
+    negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
+
+    # Use dimensions from the first image for the output
+    width, height = update_dimensions_on_upload(pil_images[0])
+
+    try:
+        progress(0.4, desc="Generating Image...")
+        
+        # Pass the list of PIL images to the pipeline
+        result_image = pipe(
+            image=pil_images,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            height=height,
+            width=width,
+            num_inference_steps=steps,
+            generator=generator,
+            true_cfg_scale=guidance_scale,
+        ).images[0]
+        
+        # --- Rerun Visualization Logic ---
+        progress(0.9, desc="Preparing Rerun Visualization...")
+        
+        run_id = str(uuid.uuid4())
+        
+        # Handle different Rerun SDK versions
+        rec = None
+        if hasattr(rr, "new_recording"):
+            rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
+        elif hasattr(rr, "RecordingStream"):
+            rec = rr.RecordingStream(application_id="Qwen-Image-Edit", recording_id=run_id)
         else:
-            input_pil = item
-
-        if randomize_seed:
-            current_seed = random.randint(0, MAX_SEED)
-        else:
-            current_seed = seed
-
-        generator = torch.Generator(device=device).manual_seed(current_seed)
-        negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
-
-        input_pil = input_pil.convert("RGB")
-        width, height = update_dimensions_on_upload(input_pil)
-
-        try:
-            progress((i + 0.5) / total_images, desc=f"Processing Image {i+1}/{total_images}...")
+            rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
+            rec = rr
             
-            with torch.inference_mode():
-                result_image = pipe(
-                    image=input_pil,
-                    prompt=prompt,
-                    negative_prompt=negative_prompt,
-                    height=height,
-                    width=width,
-                    num_inference_steps=steps,
-                    generator=generator,
-                    true_cfg_scale=guidance_scale,
-                ).images[0]
+        # Log all input images
+        for i, img in enumerate(pil_images):
+            rec.log(f"images/input_{i}", rr.Image(np.array(img)))
             
-            # --- Log to Rerun ---
-            # We use set_time_sequence to create a timeline slider in the Rerun viewer
-            # allowing the user to slide through their batch of images.
-            rec.set_time_sequence("batch_index", i)
-            rec.log("images/original", rr.Image(np.array(input_pil)))
-            rec.log("images/edited", rr.Image(np.array(result_image)))
-            
-        except Exception as e:
-            print(f"Error processing image {i}: {e}")
-            continue
-        finally:
-            # Clear VRAM after every image to avoid stacking up memory usage
-            gc.collect()
-            torch.cuda.empty_cache()
+        # Log result
+        rec.log("images/edited_result", rr.Image(np.array(result_image)))
+        
+        # Save RRD
+        rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
+        rec.save(rrd_path)
+        
+        return rrd_path, seed
 
-    # Save RRD
-    rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
-    rec.save(rrd_path)
-    
-    return rrd_path, seed
+    except Exception as e:
+        raise e
+    finally:
+        gc.collect()
+        torch.cuda.empty_cache()
 
 @spaces.GPU
-def infer_example(input_gallery, prompt, lora_adapter):
-    # Wrapper for examples
-    if not input_gallery:
+def infer_example(images, prompt, lora_adapter):
+    # Wrapper for examples (images coming from gr.Examples are usually list of filepaths)
+    if not images:
         return None, 0
     
-    # input_gallery comes as a list of paths from Examples,
-    # we need to load them as PIL images to mimic the Gallery output structure for the main function if needed,
-    # BUT gr.Gallery in examples usually passes list of paths. 
-    # The main logic above expects tuples of (PIL, caption) OR PIL. 
-    # Let's ensure we convert paths to PIL here.
-    
-    processed_gallery = []
-    for path in input_gallery:
-        if isinstance(path, str):
-            processed_gallery.append((Image.open(path), ""))
-        else:
-            processed_gallery.append((path, "")) # Already PIL or weird format
-            
+    # Ensure input is treated as a list even if example passes single path string
+    if isinstance(images, str):
+        images = [images]
+        
+    # infer expects the gallery format or list of paths
     result_rrd, seed = infer(
-        processed_gallery, 
-        prompt, 
-        lora_adapter, 
-        0,      # seed
-        True,   # randomize
-        1.0,    # guidance
-        4       # steps
+        images=images,
+        prompt=prompt,
+        lora_adapter=lora_adapter,
+        seed=0,
+        randomize_seed=True,
+        guidance_scale=1.0,
+        steps=4
     )
     return result_rrd, seed
 
-# --- Gradio UI Layout ---
 css="""
 #col-container {
     margin: 0 auto;
@@ -304,16 +311,17 @@ css="""
 
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
-        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast (Multi-Image)**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized adapters. Upload multiple images to process them in a batch. Use the timeline slider in the output to view results.")
+        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
+        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Upload one or more images.")
 
         with gr.Row(equal_height=True):
             with gr.Column():
-                # Changed to Gallery for multi-upload
-                input_gallery = gr.Gallery(
+                # Changed to Gallery to support multiple images
+                images = gr.Gallery(
                     label="Upload Images", 
-                    type="pil", 
+                    type="filepath", 
                     columns=2, 
+                    rows=1, 
                     height=300,
                     allow_preview=True
                 )
@@ -324,7 +332,7 @@ with gr.Blocks() as demo:
                     placeholder="e.g., transform into anime..",
                 )
 
-                run_button = gr.Button("Edit Batch", variant="primary")
+                run_button = gr.Button("Edit Image", variant="primary")
 
             with gr.Column():
                 rerun_output = Rerun(
@@ -344,25 +352,24 @@ with gr.Blocks() as demo:
                     guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
                     steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
         
-        # Updated Examples to be lists of paths
+        # Updated examples to use list of paths for Gallery input
         gr.Examples(
             examples=[
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
-                [["examples/B.jpg", "examples/A.jpeg"], "Transform into sketches.", "Photo-to-Anime"],
             ],
-            inputs=[input_gallery, prompt, lora_adapter],
+            inputs=[images, prompt, lora_adapter],
             outputs=[rerun_output, seed],
             fn=infer_example,
             cache_examples=False,
             label="Examples"
         )
         
-        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast) Experimental Space.")
+        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast)This is still an experimental Space for Qwen-Image-Edit-2511.")
 
     run_button.click(
         fn=infer,
-        inputs=[input_gallery, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
+        inputs=[images, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
         outputs=[rerun_output, seed]
     )
 
