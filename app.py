@@ -5,10 +5,16 @@ import numpy as np
 import spaces
 import torch
 import random
+import uuid
+import tempfile
 from PIL import Image
 from typing import Iterable
 from gradio.themes import Soft
 from gradio.themes.utils import colors, fonts, sizes
+
+# Rerun imports
+import rerun as rr
+from gradio_rerun import Rerun
 
 colors.deep_sky_blue = colors.Color(
     name="deep_sky_blue",
@@ -83,12 +89,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
 print("torch.__version__ =", torch.__version__)
 print("torch.version.cuda =", torch.version.cuda)
-print("cuda available:", torch.cuda.is_available())
-print("cuda device count:", torch.cuda.device_count())
-if torch.cuda.is_available():
-    print("current device:", torch.cuda.current_device())
-    print("device name:", torch.cuda.get_device_name(torch.cuda.current_device()))
-
 print("Using device:", device)
 
 from diffusers import FlowMatchEulerDiscreteScheduler
@@ -116,6 +116,8 @@ except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
 MAX_SEED = np.iinfo(np.int32).max
+TMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp_rerun')
+os.makedirs(TMP_DIR, exist_ok=True)
 
 ADAPTER_SPECS = {
     "Multiple-Angles": {
@@ -196,7 +198,8 @@ def infer(
     width, height = update_dimensions_on_upload(original_image)
 
     try:
-        result = pipe(
+        progress(0.4, desc="Generating Image...")
+        result_image = pipe(
             image=original_image,
             prompt=prompt,
             negative_prompt=negative_prompt,
@@ -207,7 +210,22 @@ def infer(
             true_cfg_scale=guidance_scale,
         ).images[0]
         
-        return result, seed
+        # --- Rerun Visualization Logic ---
+        progress(0.9, desc="Preparing Rerun Visualization...")
+        
+        run_id = str(uuid.uuid4())
+        rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
+        
+        # Log images to Rerun
+        # We convert PIL images to numpy arrays for Rerun
+        rec.log("images/original", rr.Image(np.array(original_image)))
+        rec.log("images/edited", rr.Image(np.array(result_image)))
+        
+        # Save RRD
+        rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
+        rec.save(rrd_path)
+        
+        return rrd_path, seed
 
     except Exception as e:
         raise e
@@ -223,8 +241,9 @@ def infer_example(input_image, prompt, lora_adapter):
     input_pil = input_image.convert("RGB")
     guidance_scale = 1.0
     steps = 4
-    result, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
-    return result, seed
+    # Call main infer but ignore progress for examples if needed
+    result_rrd, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
+    return result_rrd, seed
 
 css="""
 #col-container {
@@ -252,7 +271,323 @@ with gr.Blocks() as demo:
                 run_button = gr.Button("Edit Image", variant="primary")
 
             with gr.Column():
-                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=353)
+                # Replaced standard Image with Rerun Viewer
+                rerun_output = Rerun(
+                    label="Rerun Visualization", 
+                    height=353
+                )
+                
+                with gr.Row():
+                    lora_adapter = gr.Dropdown(
+                        label="Choose Editing Style",
+                        choices=list(ADAPTER_SPECS.keys()),
+                        value="Multiple-Angles"
+                    )
+                with gr.Accordion("Advanced Settings", open=False, visible=False):
+                    seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
+                    randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
+                    guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
+                    steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
+        
+        # Note: Cache examples might need to be False if using Rerun paths that are temporary
+        gr.Examples(
+            examples=[
+                ["examples/A.jpeg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
+            ],
+            inputs=[input_image, prompt, lora_adapter],
+            outputs=[rerun_output, seed],
+            fn=infer_example,
+            cache_examples=False,
+            label="Examples"
+        )
+        
+        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast)This is still an experimental Space for Qwen-Image-Edit-2511; you can use [Qwen-Image-Edit-2509-LoRAs-Fast](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2509-LoRAs-Fast) instead. This Space will be updated soon.")
+
+    run_button.click(
+        fn=infer,
+        inputs=[input_image, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
+        outputs=[rerun_output, seed]
+    )
+
+if __name__ == "__main__":
+    demo.queue(max_size=30).launch(css=css, theme=deep_sky_blue_theme, mcp_server=True, ssr_mode=False, show_error=True)import os
+import gc
+import gradio as gr
+import numpy as np
+import spaces
+import torch
+import random
+import uuid
+import tempfile
+from PIL import Image
+from typing import Iterable
+from gradio.themes import Soft
+from gradio.themes.utils import colors, fonts, sizes
+
+# Rerun imports
+import rerun as rr
+from gradio_rerun import Rerun
+
+colors.deep_sky_blue = colors.Color(
+    name="deep_sky_blue",
+    c50="#E0F7FF",
+    c100="#B3EAFF",
+    c200="#80DFFF",
+    c300="#4DD2FF",
+    c400="#1AC6FF",
+    c500="#00BFFF",
+    c600="#0099CC",
+    c700="#007399",
+    c800="#004C66",
+    c900="#002633",
+    c950="#00131A",
+)
+
+class DeepSkyBlueTheme(Soft):
+    def __init__(
+        self,
+        *,
+        primary_hue: colors.Color | str = colors.gray,
+        secondary_hue: colors.Color | str = colors.deep_sky_blue,
+        neutral_hue: colors.Color | str = colors.slate,
+        text_size: sizes.Size | str = sizes.text_lg,
+        font: fonts.Font | str | Iterable[fonts.Font | str] = (
+            fonts.GoogleFont("Outfit"), "Arial", "sans-serif",
+        ),
+        font_mono: fonts.Font | str | Iterable[fonts.Font | str] = (
+            fonts.GoogleFont("IBM Plex Mono"), "ui-monospace", "monospace",
+        ),
+    ):
+        super().__init__(
+            primary_hue=primary_hue,
+            secondary_hue=secondary_hue,
+            neutral_hue=neutral_hue,
+            text_size=text_size,
+            font=font,
+            font_mono=font_mono,
+        )
+        super().set(
+            background_fill_primary="*primary_50",
+            background_fill_primary_dark="*primary_900",
+            body_background_fill="linear-gradient(135deg, *primary_100, #E0F7FF)",
+            body_background_fill_dark="linear-gradient(135deg, *primary_900, *primary_800)",
+            button_primary_text_color="white",
+            button_primary_text_color_hover="white",
+            button_primary_background_fill="linear-gradient(90deg, *secondary_500, *secondary_600)",
+            button_primary_background_fill_hover="linear-gradient(90deg, *secondary_600, *secondary_700)",
+            button_primary_background_fill_dark="linear-gradient(90deg, *secondary_600, *secondary_700)",
+            button_primary_background_fill_hover_dark="linear-gradient(90deg, *secondary_500, *secondary_600)",
+            button_secondary_text_color="black",
+            button_secondary_text_color_hover="white",
+            button_secondary_background_fill="linear-gradient(90deg, *primary_300, *primary_300)",
+            button_secondary_background_fill_hover="linear-gradient(90deg, *primary_400, *primary_400)",
+            button_secondary_background_fill_dark="linear-gradient(90deg, *primary_500, *primary_600)",
+            button_secondary_background_fill_hover_dark="linear-gradient(90deg, *primary_500, *primary_500)",
+            slider_color="*secondary_500",
+            slider_color_dark="*secondary_600",
+            block_title_text_weight="600",
+            block_border_width="3px",
+            block_shadow="*shadow_drop_lg",
+            button_primary_shadow="*shadow_drop_lg",
+            button_large_padding="11px",
+            color_accent_soft="*primary_100",
+            block_label_background_fill="*primary_200",
+        )
+
+deep_sky_blue_theme = DeepSkyBlueTheme()
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
+print("torch.__version__ =", torch.__version__)
+print("torch.version.cuda =", torch.version.cuda)
+print("Using device:", device)
+
+from diffusers import FlowMatchEulerDiscreteScheduler
+from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
+from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
+from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
+
+dtype = torch.bfloat16
+
+pipe = QwenImageEditPlusPipeline.from_pretrained(
+    "Qwen/Qwen-Image-Edit-2511",
+    transformer=QwenImageTransformer2DModel.from_pretrained(
+        "linoyts/Qwen-Image-Edit-Rapid-AIO",
+        subfolder='transformer',
+        torch_dtype=dtype,
+        device_map='cuda'
+    ),
+    torch_dtype=dtype
+).to(device)
+
+try:
+    pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
+    print("Flash Attention 3 Processor set successfully.")
+except Exception as e:
+    print(f"Warning: Could not set FA3 processor: {e}")
+
+MAX_SEED = np.iinfo(np.int32).max
+TMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp_rerun')
+os.makedirs(TMP_DIR, exist_ok=True)
+
+ADAPTER_SPECS = {
+    "Multiple-Angles": {
+        "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
+        "weights": "镜头转换.safetensors",
+        "adapter_name": "multiple-angles"
+    }
+}
+
+LOADED_ADAPTERS = set()
+
+def update_dimensions_on_upload(image):
+    if image is None:
+        return 1024, 1024
+    
+    original_width, original_height = image.size
+    
+    if original_width > original_height:
+        new_width = 1024
+        aspect_ratio = original_height / original_width
+        new_height = int(new_width * aspect_ratio)
+    else:
+        new_height = 1024
+        aspect_ratio = original_width / original_height
+        new_width = int(new_height * aspect_ratio)
+        
+    new_width = (new_width // 8) * 8
+    new_height = (new_height // 8) * 8
+    
+    return new_width, new_height
+
+@spaces.GPU
+def infer(
+    input_image,
+    prompt,
+    lora_adapter,
+    seed,
+    randomize_seed,
+    guidance_scale,
+    steps,
+    progress=gr.Progress(track_tqdm=True)
+):
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    if input_image is None:
+        raise gr.Error("Please upload an image to edit.")
+
+    spec = ADAPTER_SPECS.get(lora_adapter)
+    if not spec:
+        raise gr.Error(f"Configuration not found for: {lora_adapter}")
+
+    adapter_name = spec["adapter_name"]
+
+    if adapter_name not in LOADED_ADAPTERS:
+        print(f"--- Downloading and Loading Adapter: {lora_adapter} ---")
+        try:
+            pipe.load_lora_weights(
+                spec["repo"], 
+                weight_name=spec["weights"], 
+                adapter_name=adapter_name
+            )
+            LOADED_ADAPTERS.add(adapter_name)
+        except Exception as e:
+            raise gr.Error(f"Failed to load adapter {lora_adapter}: {e}")
+    else:
+        print(f"--- Adapter {lora_adapter} is already loaded. ---")
+
+    pipe.set_adapters([adapter_name], adapter_weights=[1.0])
+
+    if randomize_seed:
+        seed = random.randint(0, MAX_SEED)
+
+    generator = torch.Generator(device=device).manual_seed(seed)
+    negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
+
+    original_image = input_image.convert("RGB")
+    width, height = update_dimensions_on_upload(original_image)
+
+    try:
+        progress(0.4, desc="Generating Image...")
+        result_image = pipe(
+            image=original_image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            height=height,
+            width=width,
+            num_inference_steps=steps,
+            generator=generator,
+            true_cfg_scale=guidance_scale,
+        ).images[0]
+        
+        # --- Rerun Visualization Logic ---
+        progress(0.9, desc="Preparing Rerun Visualization...")
+        
+        run_id = str(uuid.uuid4())
+        rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
+        
+        # Log images to Rerun
+        # We convert PIL images to numpy arrays for Rerun
+        rec.log("images/original", rr.Image(np.array(original_image)))
+        rec.log("images/edited", rr.Image(np.array(result_image)))
+        
+        # Save RRD
+        rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
+        rec.save(rrd_path)
+        
+        return rrd_path, seed
+
+    except Exception as e:
+        raise e
+    finally:
+        gc.collect()
+        torch.cuda.empty_cache()
+
+@spaces.GPU
+def infer_example(input_image, prompt, lora_adapter):
+    if input_image is None:
+        return None, 0
+    
+    input_pil = input_image.convert("RGB")
+    guidance_scale = 1.0
+    steps = 4
+    # Call main infer but ignore progress for examples if needed
+    result_rrd, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
+    return result_rrd, seed
+
+css="""
+#col-container {
+    margin: 0 auto;
+    max-width: 960px;
+}
+#main-title h1 {font-size: 2.1em !important;}
+"""
+
+with gr.Blocks() as demo:
+    with gr.Column(elem_id="col-container"):
+        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
+        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters for the [Qwen-Image-Edit](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) model.")
+
+        with gr.Row(equal_height=True):
+            with gr.Column():
+                input_image = gr.Image(label="Upload Image", type="pil", height=290)
+                
+                prompt = gr.Text(
+                    label="Edit Prompt",
+                    show_label=True,
+                    placeholder="e.g., transform into anime..",
+                )
+
+                run_button = gr.Button("Edit Image", variant="primary")
+
+            with gr.Column():
+                # Replaced standard Image with Rerun Viewer
+                rerun_output = Rerun(
+                    label="Rerun Visualization", 
+                    height=353
+                )
                 
                 with gr.Row():
                     lora_adapter = gr.Dropdown(
@@ -271,7 +606,7 @@ with gr.Blocks() as demo:
                 ["examples/A.jpeg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[input_image, prompt, lora_adapter],
-            outputs=[output_image, seed],
+            outputs=[rerun_output, seed],
             fn=infer_example,
             cache_examples=False,
             label="Examples"
@@ -282,7 +617,7 @@ with gr.Blocks() as demo:
     run_button.click(
         fn=infer,
         inputs=[input_image, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[output_image, seed]
+        outputs=[rerun_output, seed]
     )
 
 if __name__ == "__main__":
