@@ -222,13 +222,18 @@ def infer(
         # Handle different Rerun SDK versions robustly
         rec = None
         if hasattr(rr, "new_recording"):
+            # Newer Rerun versions
             rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
         elif hasattr(rr, "RecordingStream"):
+             # Alternative direct class instantiation
             rec = rr.RecordingStream(application_id="Qwen-Image-Edit", recording_id=run_id)
         else:
+            # Fallback for older versions or simple scripts (Global State)
             rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
             rec = rr
             
+        # Log images to Rerun
+        # rec.log handles logging for both RecordingStream objects and the global rr module
         rec.log("images/original", rr.Image(np.array(original_image)))
         rec.log("images/edited", rr.Image(np.array(result_image)))
         
@@ -236,11 +241,7 @@ def infer(
         rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
         rec.save(rrd_path)
         
-        # Save Result Image for Download Box
-        image_path = os.path.join(TMP_DIR, f"{run_id}.png")
-        result_image.save(image_path)
-        
-        return rrd_path, seed, image_path
+        return rrd_path, seed
 
     except Exception as e:
         raise e
@@ -251,14 +252,14 @@ def infer(
 @spaces.GPU
 def infer_example(input_image, prompt, lora_adapter):
     if input_image is None:
-        return None, 0, None
+        return None, 0
     
     input_pil = input_image.convert("RGB")
     guidance_scale = 1.0
     steps = 4
-    
-    result_rrd, seed, image_path = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
-    return result_rrd, seed, image_path
+    # Call main infer but ignore progress for examples if needed
+    result_rrd, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
+    return result_rrd, seed
 
 css="""
 #col-container {
@@ -273,9 +274,9 @@ with gr.Blocks() as demo:
         gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
         gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters for the [Qwen-Image-Edit](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) model.")
 
-        with gr.Row(equal_height=True):
+        with gr.Row():
             with gr.Column():
-                input_image = gr.Image(label="Upload Image", type="pil", height=295)
+                input_image = gr.Image(label="Upload Image", type="pil", height=290)
                 
                 prompt = gr.Text(
                     label="Edit Prompt",
@@ -291,8 +292,6 @@ with gr.Blocks() as demo:
                     label="Rerun Visualization", 
                     height=353
                 )
-
-                result_file = gr.File(label="Download Edited Image")
                 
                 with gr.Row():
                     lora_adapter = gr.Dropdown(
@@ -300,7 +299,6 @@ with gr.Blocks() as demo:
                         choices=list(ADAPTER_SPECS.keys()),
                         value="Photo-to-Anime"
                     )
-
                 with gr.Accordion("Advanced Settings", open=False, visible=False):
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
                     randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
@@ -313,7 +311,7 @@ with gr.Blocks() as demo:
                 ["examples/A.jpeg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[input_image, prompt, lora_adapter],
-            outputs=[rerun_output, seed, result_file],
+            outputs=[rerun_output, seed],
             fn=infer_example,
             cache_examples=False,
             label="Examples"
@@ -324,7 +322,7 @@ with gr.Blocks() as demo:
     run_button.click(
         fn=infer,
         inputs=[input_image, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[rerun_output, seed, result_file]
+        outputs=[rerun_output, seed]
     )
 
 if __name__ == "__main__":
