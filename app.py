@@ -267,7 +267,7 @@ css="""
     margin: 0 auto;
     max-width: 980px;
 }
-#main-title h1 {font-size: 2.1em !important;}
+#main-title h1 {font-size: 2.3em !important;}
 """
 
 with gr.Blocks() as demo:
