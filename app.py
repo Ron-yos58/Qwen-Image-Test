@@ -305,15 +305,6 @@ css="""
     max-width: 1000px;
 }
 #main-title h1 {font-size: 2.3em !important;}
-
-#download-btn {
-    background-color: #00FA9A !important;
-    color: black !important;
-    border: none !important;
-}
-#download-btn:hover {
-    background-color: #00E08A !important;
-}
 """
 
 with gr.Blocks() as demo:
@@ -364,14 +355,13 @@ with gr.Blocks() as demo:
             download_button = gr.DownloadButton(
                 label="Download Image", 
                 visible=False,
-                elem_id="download-btn"
                 )
         
         gr.Examples(
             examples=[
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
-                [["examples/P1.jpg", "examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it. The new pose should be pixel accurate to the pose we are trying to copy. The position of the arms and head and legs should be the same as the pose we are trying to copy. Change the field of view and angle to match exactly image 2. Head tilt and eye gaze pose should match the person in image 2.", "Any-Pose"],
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
+                [["examples/P1.jpg", "examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it. The new pose should be pixel accurate to the pose we are trying to copy. The position of the arms and head and legs should be the same as the pose we are trying to copy. Change the field of view and angle to match exactly image 2. Head tilt and eye gaze pose should match the person in image 2.", "Any-Pose"],
             ],
             inputs=[images, prompt, lora_adapter],
             outputs=[rerun_output, seed, download_button],
