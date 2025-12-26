@@ -214,10 +214,22 @@ def infer(
         progress(0.9, desc="Preparing Rerun Visualization...")
         
         run_id = str(uuid.uuid4())
-        rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
         
+        # Handle different Rerun SDK versions robustly
+        rec = None
+        if hasattr(rr, "new_recording"):
+            # Newer Rerun versions
+            rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
+        elif hasattr(rr, "RecordingStream"):
+             # Alternative direct class instantiation
+            rec = rr.RecordingStream(application_id="Qwen-Image-Edit", recording_id=run_id)
+        else:
+            # Fallback for older versions or simple scripts (Global State)
+            rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
+            rec = rr
+            
         # Log images to Rerun
-        # We convert PIL images to numpy arrays for Rerun
+        # rec.log handles logging for both RecordingStream objects and the global rr module
         rec.log("images/original", rr.Image(np.array(original_image)))
         rec.log("images/edited", rr.Image(np.array(result_image)))
         
