@@ -304,14 +304,15 @@ css="""
     margin: 0 auto;
     max-width: 1000px;
 }
-#main-title h1 {font-size: 2.2em !important;}
+#main-title h1 {font-size: 2.3em !important;}
 
-.submit-btn {
-    background-color: #2980b9 !important;
-    color: white !important;
+#download-btn {
+    background-color: #00FA9A !important;
+    color: black !important;
+    border: none !important;
 }
-.submit-btn:hover {
-    background-color: #3498db !important;
+#download-btn:hover {
+    background-color: #00E08A !important;
 }
 """
 
@@ -363,7 +364,7 @@ with gr.Blocks() as demo:
             download_button = gr.DownloadButton(
                 label="Download Image", 
                 visible=False,
-                elem_classes="submit-btn"
+                elem_id="download-btn"
                 )
         
         gr.Examples(
