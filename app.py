@@ -265,7 +265,7 @@ def infer_example(input_image, prompt, lora_adapter):
 css="""
 #col-container {
     margin: 0 auto;
-    max-width: 980px;
+    max-width: 1000px;
 }
 #main-title h1 {font-size: 2.2em !important;}
 """
