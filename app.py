@@ -305,6 +305,14 @@ css="""
     max-width: 1000px;
 }
 #main-title h1 {font-size: 2.2em !important;}
+
+.submit-btn {
+    background-color: #2980b9 !important;
+    color: white !important;
+}
+.submit-btn:hover {
+    background-color: #3498db !important;
+}
 """
 
 with gr.Blocks() as demo:
@@ -355,7 +363,7 @@ with gr.Blocks() as demo:
             download_button = gr.DownloadButton(
                 label="Download Image", 
                 visible=False,
-                variant="primary"
+                elem_classes="submit-btn"
                 )
         
         gr.Examples(
