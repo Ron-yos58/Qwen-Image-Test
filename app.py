@@ -240,8 +240,32 @@ def infer(
         # Save RRD
         rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
         rec.save(rrd_path)
+
+        # Save Image for Download
+        image_path = os.path.join(TMP_DIR, f"{run_id}.png")
+        result_image.save(image_path)
         
-        return rrd_path, seed
+        # Create HTML download bar
+        download_html = f'''
+        <a href="/file={image_path}" download="edited_image_{run_id}.png" target="_blank" style="
+            display: block;
+            width: 100%;
+            background-color: #FF4500;
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+            margin-top: 10px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-family: 'Outfit', sans-serif;
+            transition: background-color 0.2s;
+        " onmouseover="this.style.backgroundColor='#E63E00'" onmouseout="this.style.backgroundColor='#FF4500'">
+            Download Generated Image
+        </a>
+        '''
+        
+        return rrd_path, download_html, seed
 
     except Exception as e:
         raise e
@@ -252,14 +276,14 @@ def infer(
 @spaces.GPU
 def infer_example(input_image, prompt, lora_adapter):
     if input_image is None:
-        return None, 0
+        return None, None, 0
     
     input_pil = input_image.convert("RGB")
     guidance_scale = 1.0
     steps = 4
     # Call main infer but ignore progress for examples if needed
-    result_rrd, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
-    return result_rrd, seed
+    result_rrd, download_html, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
+    return result_rrd, download_html, seed
 
 css="""
 #col-container {
@@ -274,7 +298,7 @@ with gr.Blocks() as demo:
         gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
         gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters for the [Qwen-Image-Edit](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) model.")
 
-        with gr.Row():
+        with gr.Row(equal_height=True):
             with gr.Column():
                 input_image = gr.Image(label="Upload Image", type="pil", height=290)
                 
@@ -292,6 +316,8 @@ with gr.Blocks() as demo:
                     label="Rerun Visualization", 
                     height=353
                 )
+                # HTML Download Bar
+                download_html = gr.HTML()
                 
                 with gr.Row():
                     lora_adapter = gr.Dropdown(
@@ -299,6 +325,9 @@ with gr.Blocks() as demo:
                         choices=list(ADAPTER_SPECS.keys()),
                         value="Photo-to-Anime"
                     )
+                
+
+
                 with gr.Accordion("Advanced Settings", open=False, visible=False):
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
                     randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
@@ -311,7 +340,7 @@ with gr.Blocks() as demo:
                 ["examples/A.jpeg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[input_image, prompt, lora_adapter],
-            outputs=[rerun_output, seed],
+            outputs=[rerun_output, download_html, seed],
             fn=infer_example,
             cache_examples=False,
             label="Examples"
@@ -322,7 +351,7 @@ with gr.Blocks() as demo:
     run_button.click(
         fn=infer,
         inputs=[input_image, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[rerun_output, seed]
+        outputs=[rerun_output, download_html, seed]
     )
 
 if __name__ == "__main__":
