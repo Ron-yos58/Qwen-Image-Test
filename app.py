@@ -12,6 +12,7 @@ from typing import Iterable
 from gradio.themes import Soft
 from gradio.themes.utils import colors, fonts, sizes
 
+# Rerun imports
 import rerun as rr
 from gradio_rerun import Rerun
 
@@ -219,23 +220,37 @@ def infer(
         
         run_id = str(uuid.uuid4())
         
-        # Handle different Rerun SDK versions robustly
+        # Initialize Rerun Recorder
         rec = None
         if hasattr(rr, "new_recording"):
-            # Newer Rerun versions
             rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
         elif hasattr(rr, "RecordingStream"):
-             # Alternative direct class instantiation
             rec = rr.RecordingStream(application_id="Qwen-Image-Edit", recording_id=run_id)
         else:
-            # Fallback for older versions or simple scripts (Global State)
             rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
             rec = rr
             
-        # Log images to Rerun
-        # rec.log handles logging for both RecordingStream objects and the global rr module
+        # 1. Log Original Image
         rec.log("images/original", rr.Image(np.array(original_image)))
+        
+        # 2. Log Edited Image
         rec.log("images/edited", rr.Image(np.array(result_image)))
+        
+        # 3. Create Download Link inside Rerun
+        # Save the result image to disk so Gradio can serve it
+        save_filename = f"edited_{run_id}.png"
+        save_path = os.path.join(TMP_DIR, save_filename)
+        result_image.save(save_path)
+        
+        # Create a markdown link pointing to the file served by Gradio
+        # /file= is the standard Gradio route for serving local files
+        download_markdown = f"""
+        # Download
+        [Click here to download the edited image](/file={save_path})
+        """
+        
+        # Log the markdown document
+        rec.log("download_section", rr.TextDocument(download_markdown, media_type=rr.MediaType.MARKDOWN))
         
         # Save RRD
         rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
@@ -257,7 +272,7 @@ def infer_example(input_image, prompt, lora_adapter):
     input_pil = input_image.convert("RGB")
     guidance_scale = 1.0
     steps = 4
-    # Call main infer but ignore progress for examples if needed
+    # Call main infer but ignore progress for examples
     result_rrd, seed = infer(input_pil, prompt, lora_adapter, 0, True, guidance_scale, steps)
     return result_rrd, seed
 
@@ -287,7 +302,7 @@ with gr.Blocks() as demo:
                 run_button = gr.Button("Edit Image", variant="primary")
 
             with gr.Column():
-                # Replaced standard Image with Rerun Viewer
+                # Rerun Viewer
                 rerun_output = Rerun(
                     label="Rerun Visualization", 
                     height=353
