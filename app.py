@@ -12,7 +12,6 @@ from typing import Iterable
 from gradio.themes import Soft
 from gradio.themes.utils import colors, fonts, sizes
 
-# Rerun imports
 import rerun as rr
 from gradio_rerun import Rerun
 
@@ -306,7 +305,6 @@ with gr.Blocks() as demo:
                     guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
                     steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
         
-        # Note: Cache examples might need to be False if using Rerun paths that are temporary
         gr.Examples(
             examples=[
                 ["examples/B.jpg", "Transform into anime.", "Photo-to-Anime"],
