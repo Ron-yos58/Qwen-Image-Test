@@ -15,7 +15,6 @@ from gradio.themes.utils import colors, fonts, sizes
 import rerun as rr
 from gradio_rerun import Rerun
 
-# --- Theme Configuration ---
 colors.orange_red = colors.Color(
     name="orange_red",
     c50="#FFF0E5",
@@ -84,7 +83,6 @@ class OrangeRedTheme(Soft):
 
 orange_red_theme = OrangeRedTheme()
 
-# --- Model & Device Setup ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
@@ -180,9 +178,7 @@ def infer(
     pil_images = []
     if images is not None:
         for item in images:
-            # Gradio Gallery returns a list of tuples (filepath, label) or (image, label) depending on version/type
             try:
-                # Check for tuple (standard Gradio Gallery output)
                 if isinstance(item, tuple) or isinstance(item, list):
                     path_or_img = item[0]
                 else:
@@ -193,7 +189,6 @@ def infer(
                 elif isinstance(path_or_img, Image.Image):
                     pil_images.append(path_or_img.convert("RGB"))
                 else:
-                    # Fallback for complex Gradio objects
                     pil_images.append(Image.open(path_or_img.name).convert("RGB"))
             except Exception as e:
                 print(f"Skipping invalid image item: {e}")
@@ -232,13 +227,11 @@ def infer(
     generator = torch.Generator(device=device).manual_seed(seed)
     negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
 
-    # Use dimensions from the first image for the output
     width, height = update_dimensions_on_upload(pil_images[0])
 
     try:
         progress(0.4, desc="Generating Image...")
         
-        # Pass the list of PIL images to the pipeline
         result_image = pipe(
             image=pil_images,
             prompt=prompt,
@@ -250,10 +243,13 @@ def infer(
             true_cfg_scale=guidance_scale,
         ).images[0]
         
+        # --- Save Image for Download ---
+        run_id = str(uuid.uuid4())
+        output_image_path = os.path.join(TMP_DIR, f"{run_id}_output.png")
+        result_image.save(output_image_path)
+
         # --- Rerun Visualization Logic ---
         progress(0.9, desc="Preparing Rerun Visualization...")
-        
-        run_id = str(uuid.uuid4())
         
         # Handle different Rerun SDK versions
         rec = None
@@ -265,7 +261,7 @@ def infer(
             rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
             rec = rr
             
-        # Log all input images
+        # Log inputs
         for i, img in enumerate(pil_images):
             rec.log(f"images/input_{i}", rr.Image(np.array(img)))
             
@@ -276,7 +272,7 @@ def infer(
         rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
         rec.save(rrd_path)
         
-        return rrd_path, seed
+        return rrd_path, seed, gr.update(value=output_image_path, visible=True)
 
     except Exception as e:
         raise e
@@ -286,16 +282,13 @@ def infer(
 
 @spaces.GPU
 def infer_example(images, prompt, lora_adapter):
-    # Wrapper for examples (images coming from gr.Examples are usually list of filepaths)
     if not images:
-        return None, 0
+        return None, 0, gr.update(visible=False)
     
-    # Ensure input is treated as a list even if example passes single path string
     if isinstance(images, str):
         images = [images]
         
-    # infer expects the gallery format or list of paths
-    result_rrd, seed = infer(
+    result_rrd, seed, img_path = infer(
         images=images,
         prompt=prompt,
         lora_adapter=lora_adapter,
@@ -304,7 +297,7 @@ def infer_example(images, prompt, lora_adapter):
         guidance_scale=1.0,
         steps=4
     )
-    return result_rrd, seed
+    return result_rrd, seed, img_path
 
 css="""
 #col-container {
@@ -321,7 +314,6 @@ with gr.Blocks() as demo:
 
         with gr.Row(equal_height=True):
             with gr.Column():
-                # Changed to Gallery to support multiple images
                 images = gr.Gallery(
                     label="Upload Images", 
                     type="filepath", 
@@ -342,7 +334,7 @@ with gr.Blocks() as demo:
             with gr.Column():
                 rerun_output = Rerun(
                     label="Rerun Visualization", 
-                    height=355
+                    height=353
                 )
                 
                 with gr.Row():
@@ -351,13 +343,20 @@ with gr.Blocks() as demo:
                         choices=list(ADAPTER_SPECS.keys()),
                         value="Photo-to-Anime"
                     )
+                
                 with gr.Accordion("Advanced Settings", open=False, visible=False):
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
                     randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
                     guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
                     steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
+
+
+        with gr.Accordion("Download The Edited Image File", open=False, visible=True):
+            download_button = gr.DownloadButton(
+                label="Download Image", 
+                visible=True
+                )
         
-        # Updated examples to use list of paths for Gallery input
         gr.Examples(
             examples=[
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
@@ -365,7 +364,7 @@ with gr.Blocks() as demo:
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[images, prompt, lora_adapter],
-            outputs=[rerun_output, seed],
+            outputs=[rerun_output, seed, download_button],
             fn=infer_example,
             cache_examples=False,
             label="Examples"
@@ -376,7 +375,7 @@ with gr.Blocks() as demo:
     run_button.click(
         fn=infer,
         inputs=[images, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[rerun_output, seed]
+        outputs=[rerun_output, seed, download_button]
     )
 
 if __name__ == "__main__":
