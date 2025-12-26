@@ -334,7 +334,7 @@ with gr.Blocks() as demo:
             with gr.Column():
                 rerun_output = Rerun(
                     label="Rerun Visualization", 
-                    height=353
+                    height=354
                 )
                 
                 with gr.Row():
@@ -351,7 +351,7 @@ with gr.Blocks() as demo:
                     steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
 
 
-        with gr.Accordion("Open And Download The Edited Image File", open=False, visible=True):
+        with gr.Accordion("Run Edit Image and Download Result", open=False, visible=True):
             download_button = gr.DownloadButton(
                 label="Download Image", 
                 visible=False,
