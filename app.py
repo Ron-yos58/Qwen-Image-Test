@@ -351,10 +351,11 @@ with gr.Blocks() as demo:
                     steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
 
 
-        with gr.Accordion("Download The Edited Image File", open=False, visible=True):
+        with gr.Accordion("Open And Download The Edited Image File", open=False, visible=True):
             download_button = gr.DownloadButton(
                 label="Download Image", 
-                visible=True
+                visible=False,
+                variant="primary"
                 )
         
         gr.Examples(
