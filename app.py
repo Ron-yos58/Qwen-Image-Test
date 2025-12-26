@@ -84,7 +84,7 @@ class OrangeRedTheme(Soft):
 
 orange_red_theme = OrangeRedTheme()
 
-# --- Device Setup ---
+# --- Hardware Setup ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
@@ -117,6 +117,7 @@ MAX_SEED = np.iinfo(np.int32).max
 TMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp_rerun')
 os.makedirs(TMP_DIR, exist_ok=True)
 
+# --- Adapters ---
 ADAPTER_SPECS = {
     "Multiple-Angles": {
         "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
@@ -163,17 +164,13 @@ def infer(
     steps,
     progress=gr.Progress(track_tqdm=True)
 ):
-    """
-    Processes a list of images from the gallery.
-    Logs each image pair (original, edited) to a Rerun timeline.
-    """
     gc.collect()
     torch.cuda.empty_cache()
 
     if not input_gallery:
-        raise gr.Error("Please upload at least one image.")
+        raise gr.Error("Please upload at least one image to edit.")
 
-    # 1. Load Adapter
+    # --- Adapter Loading ---
     spec = ADAPTER_SPECS.get(lora_adapter)
     if not spec:
         raise gr.Error(f"Configuration not found for: {lora_adapter}")
@@ -196,99 +193,107 @@ def infer(
 
     pipe.set_adapters([adapter_name], adapter_weights=[1.0])
 
-    if randomize_seed:
-        seed = random.randint(0, MAX_SEED)
-
-    generator = torch.Generator(device=device).manual_seed(seed)
-    negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
-
-    # 2. Setup Rerun
+    # --- Setup Rerun ---
     run_id = str(uuid.uuid4())
     if hasattr(rr, "new_recording"):
-        rec = rr.new_recording(application_id="Qwen-Image-Edit-Multi", recording_id=run_id)
+        rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
     elif hasattr(rr, "RecordingStream"):
-        rec = rr.RecordingStream(application_id="Qwen-Image-Edit-Multi", recording_id=run_id)
+        rec = rr.RecordingStream(application_id="Qwen-Image-Edit", recording_id=run_id)
     else:
-        rr.init("Qwen-Image-Edit-Multi", recording_id=run_id, spawn=False)
+        rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
         rec = rr
 
-    # 3. Iterate through Gallery
-    # input_gallery is a list of PIL Images (when type="pil") or objects depending on version.
+    # --- Processing Loop ---
+    # gr.Gallery(type="pil") returns a list of tuples: [(PIL.Image, str_caption), ...]
+    # We iterate over them.
     
     total_images = len(input_gallery)
     
-    for idx, img_obj in enumerate(input_gallery):
-        # Gradio Gallery type="pil" returns a list of tuples (image, caption) or images.
-        # We ensure we get the PIL image.
-        if isinstance(img_obj, (tuple, list)):
-            input_pil = img_obj[0]
+    for i, item in enumerate(input_gallery):
+        # Handle format: item might be (image, caption) tuple or just image depending on version/updates
+        if isinstance(item, (tuple, list)):
+            input_pil = item[0]
         else:
-            input_pil = img_obj
-            
-        if not isinstance(input_pil, Image.Image):
-             # Try converting if it's a path string (fallback)
-             try:
-                 input_pil = Image.open(input_pil)
-             except:
-                 continue
+            input_pil = item
+
+        if randomize_seed:
+            current_seed = random.randint(0, MAX_SEED)
+        else:
+            current_seed = seed
+
+        generator = torch.Generator(device=device).manual_seed(current_seed)
+        negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
 
         input_pil = input_pil.convert("RGB")
         width, height = update_dimensions_on_upload(input_pil)
 
-        progress((idx + 1) / total_images, desc=f"Processing Image {idx+1}/{total_images}...")
-
         try:
-            result_image = pipe(
-                image=input_pil,
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                height=height,
-                width=width,
-                num_inference_steps=steps,
-                generator=generator,
-                true_cfg_scale=guidance_scale,
-            ).images[0]
-
-            # Log to Rerun Timeline
-            # We use 'sample_index' as the timeline axis. 
-            # In the viewer, dragging the slider changes the visible image.
-            rec.set_time_sequence("image_index", idx)
+            progress((i + 0.5) / total_images, desc=f"Processing Image {i+1}/{total_images}...")
+            
+            with torch.inference_mode():
+                result_image = pipe(
+                    image=input_pil,
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    height=height,
+                    width=width,
+                    num_inference_steps=steps,
+                    generator=generator,
+                    true_cfg_scale=guidance_scale,
+                ).images[0]
+            
+            # --- Log to Rerun ---
+            # We use set_time_sequence to create a timeline slider in the Rerun viewer
+            # allowing the user to slide through their batch of images.
+            rec.set_time_sequence("batch_index", i)
             rec.log("images/original", rr.Image(np.array(input_pil)))
             rec.log("images/edited", rr.Image(np.array(result_image)))
-            rec.log("metadata/prompt", rr.TextDocument(f"Image {idx+1}: {prompt}"))
-
+            
         except Exception as e:
-            print(f"Error processing image {idx}: {e}")
+            print(f"Error processing image {i}: {e}")
             continue
+        finally:
+            # Clear VRAM after every image to avoid stacking up memory usage
+            gc.collect()
+            torch.cuda.empty_cache()
 
-    # 4. Save RRD
+    # Save RRD
     rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
     rec.save(rrd_path)
-    
-    gc.collect()
-    torch.cuda.empty_cache()
     
     return rrd_path, seed
 
 @spaces.GPU
 def infer_example(input_gallery, prompt, lora_adapter):
     # Wrapper for examples
-    # input_gallery comes as a list of file paths from gr.Examples
     if not input_gallery:
         return None, 0
     
-    pil_list = []
+    # input_gallery comes as a list of paths from Examples,
+    # we need to load them as PIL images to mimic the Gallery output structure for the main function if needed,
+    # BUT gr.Gallery in examples usually passes list of paths. 
+    # The main logic above expects tuples of (PIL, caption) OR PIL. 
+    # Let's ensure we convert paths to PIL here.
+    
+    processed_gallery = []
     for path in input_gallery:
-        pil_list.append(Image.open(path))
-        
+        if isinstance(path, str):
+            processed_gallery.append((Image.open(path), ""))
+        else:
+            processed_gallery.append((path, "")) # Already PIL or weird format
+            
     result_rrd, seed = infer(
-        pil_list, 
+        processed_gallery, 
         prompt, 
         lora_adapter, 
-        0, True, 1.0, 4
+        0,      # seed
+        True,   # randomize
+        1.0,    # guidance
+        4       # steps
     )
     return result_rrd, seed
 
+# --- Gradio UI Layout ---
 css="""
 #col-container {
     margin: 0 auto;
@@ -300,11 +305,11 @@ css="""
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
         gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast (Multi-Image)**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits on **multiple images** at once using specialized LoRA adapters. View results in the Rerun timeline.")
+        gr.Markdown("Perform diverse image edits using specialized adapters. Upload multiple images to process them in a batch. Use the timeline slider in the output to view results.")
 
         with gr.Row(equal_height=True):
             with gr.Column():
-                # CHANGED: Using Gallery instead of Image
+                # Changed to Gallery for multi-upload
                 input_gallery = gr.Gallery(
                     label="Upload Images", 
                     type="pil", 
@@ -319,11 +324,11 @@ with gr.Blocks() as demo:
                     placeholder="e.g., transform into anime..",
                 )
 
-                run_button = gr.Button("Edit Images", variant="primary")
+                run_button = gr.Button("Edit Batch", variant="primary")
 
             with gr.Column():
                 rerun_output = Rerun(
-                    label="Rerun Visualization (Use Slider)", 
+                    label="Rerun Visualization", 
                     height=353
                 )
                 
@@ -339,19 +344,12 @@ with gr.Blocks() as demo:
                     guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
                     steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
         
-        # UPDATED: Examples must handle list of paths for gallery
+        # Updated Examples to be lists of paths
         gr.Examples(
             examples=[
-                [
-                    ["examples/B.jpg"], 
-                    "Transform into anime.", 
-                    "Photo-to-Anime"
-                ],
-                [
-                    ["examples/A.jpeg", "examples/B.jpg"], 
-                    "Rotate the camera 45 degrees to the right.", 
-                    "Multiple-Angles"
-                ],
+                [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
+                [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
+                [["examples/B.jpg", "examples/A.jpeg"], "Transform into sketches.", "Photo-to-Anime"],
             ],
             inputs=[input_gallery, prompt, lora_adapter],
             outputs=[rerun_output, seed],
@@ -360,7 +358,7 @@ with gr.Blocks() as demo:
             label="Examples"
         )
         
-       # gr.Markdown("Note: When multiple images are processed, use the **timeline slider** in the Rerun viewer to switch between them.")
+        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast) Experimental Space.")
 
     run_button.click(
         fn=infer,
