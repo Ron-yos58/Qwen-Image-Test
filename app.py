@@ -124,7 +124,12 @@ ADAPTER_SPECS = {
         "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
         "weights": "镜头转换.safetensors",
         "adapter_name": "multiple-angles"
-    }
+    },
+    "Photo-to-Anime": {
+        "repo": "autoweeb/Qwen-Image-Edit-2509-Photo-to-Anime",
+        "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
+        "adapter_name": "photo-to-anime"
+    },
 }
 
 LOADED_ADAPTERS = set()
@@ -260,7 +265,7 @@ def infer_example(input_image, prompt, lora_adapter):
 css="""
 #col-container {
     margin: 0 auto;
-    max-width: 960px;
+    max-width: 980px;
 }
 #main-title h1 {font-size: 2.1em !important;}
 """
@@ -293,7 +298,7 @@ with gr.Blocks() as demo:
                     lora_adapter = gr.Dropdown(
                         label="Choose Editing Style",
                         choices=list(ADAPTER_SPECS.keys()),
-                        value="Multiple-Angles"
+                        value="Photo-to-Anime"
                     )
                 with gr.Accordion("Advanced Settings", open=False, visible=False):
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
@@ -304,6 +309,7 @@ with gr.Blocks() as demo:
         # Note: Cache examples might need to be False if using Rerun paths that are temporary
         gr.Examples(
             examples=[
+                ["examples/B.jpg", "Transform into anime.", "Photo-to-Anime"],
                 ["examples/A.jpeg", "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[input_image, prompt, lora_adapter],
