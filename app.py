@@ -130,6 +130,11 @@ ADAPTER_SPECS = {
         "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
         "adapter_name": "photo-to-anime"
     },
+    "Any-Pose": {
+        "repo": "lilylilith/AnyPose",
+        "weights": "2511-AnyPose-base-000006250.safetensors",
+        "adapter_name": "any-pose"
+    },
 }
 
 LOADED_ADAPTERS = set()
@@ -337,7 +342,7 @@ with gr.Blocks() as demo:
             with gr.Column():
                 rerun_output = Rerun(
                     label="Rerun Visualization", 
-                    height=353
+                    height=355
                 )
                 
                 with gr.Row():
@@ -356,6 +361,7 @@ with gr.Blocks() as demo:
         gr.Examples(
             examples=[
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
+                [["examples/P1.jpg"], ["examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it. The new pose should be pixel accurate to the pose we are trying to copy. The position of the arms and head and legs should be the same as the pose we are trying to copy. Change the field of view and angle to match exactly image 2. Head tilt and eye gaze pose should match the person in image 2.", "Any-Pose"],
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
             ],
             inputs=[images, prompt, lora_adapter],
