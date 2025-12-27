@@ -133,6 +133,11 @@ ADAPTER_SPECS = {
         "weights": "2511-AnyPose-helper-00006000.safetensors",
         "adapter_name": "any-pose"
     },
+    "Light-Migration": {
+        "repo": "dx8152/Qwen-Edit-2509-Light-Migration",
+        "weights": "参考色调.safetensors",
+        "adapter_name": "light-migration"
+    },
 }
 
 LOADED_ADAPTERS = set()
@@ -361,6 +366,7 @@ with gr.Blocks() as demo:
             examples=[
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
+                [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
                 [["examples/P1.jpg", "examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it. The new pose should be pixel accurate to the pose we are trying to copy. The position of the arms and head and legs should be the same as the pose we are trying to copy. Change the field of view and angle to match exactly image 2. Head tilt and eye gaze pose should match the person in image 2.", "Any-Pose"],
             ],
             inputs=[images, prompt, lora_adapter],
