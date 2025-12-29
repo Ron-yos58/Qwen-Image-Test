@@ -276,7 +276,7 @@ css="""
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
         gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Upload one or more images (required for tasks like Any-Pose or Light-Migration).")
+        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Upload one or more images.")
 
         with gr.Row(equal_height=True):
             with gr.Column():
@@ -298,7 +298,7 @@ with gr.Blocks() as demo:
                 run_button = gr.Button("Edit Image", variant="primary")
 
             with gr.Column():
-                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=353)
+                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=357)
                 
                 with gr.Row():
                     lora_adapter = gr.Dropdown(
