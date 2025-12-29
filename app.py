@@ -5,15 +5,10 @@ import numpy as np
 import spaces
 import torch
 import random
-import uuid
-import tempfile
 from PIL import Image
 from typing import Iterable
 from gradio.themes import Soft
 from gradio.themes.utils import colors, fonts, sizes
-
-import rerun as rr
-from gradio_rerun import Rerun
 
 colors.orange_red = colors.Color(
     name="orange_red",
@@ -114,8 +109,6 @@ except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
 MAX_SEED = np.iinfo(np.int32).max
-TMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp_rerun')
-os.makedirs(TMP_DIR, exist_ok=True)
 
 ADAPTER_SPECS = {
     "Multiple-Angles": {
@@ -179,7 +172,6 @@ def infer(
     if not images:
         raise gr.Error("Please upload at least one image to edit.")
 
-    # --- Process Gallery Input ---
     pil_images = []
     if images is not None:
         for item in images:
@@ -202,7 +194,6 @@ def infer(
     if not pil_images:
         raise gr.Error("Could not process uploaded images.")
 
-    # --- Load Adapter ---
     spec = ADAPTER_SPECS.get(lora_adapter)
     if not spec:
         raise gr.Error(f"Configuration not found for: {lora_adapter}")
@@ -225,7 +216,6 @@ def infer(
 
     pipe.set_adapters([adapter_name], adapter_weights=[1.0])
 
-    # --- Setup Generation ---
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
 
@@ -235,8 +225,6 @@ def infer(
     width, height = update_dimensions_on_upload(pil_images[0])
 
     try:
-        progress(0.4, desc="Generating Image...")
-        
         result_image = pipe(
             image=pil_images,
             prompt=prompt,
@@ -248,36 +236,7 @@ def infer(
             true_cfg_scale=guidance_scale,
         ).images[0]
         
-        # --- Save Image for Download ---
-        run_id = str(uuid.uuid4())
-        output_image_path = os.path.join(TMP_DIR, f"{run_id}_output.png")
-        result_image.save(output_image_path)
-
-        # --- Rerun Visualization Logic ---
-        progress(0.9, desc="Preparing Rerun Visualization...")
-        
-        # Handle different Rerun SDK versions
-        rec = None
-        if hasattr(rr, "new_recording"):
-            rec = rr.new_recording(application_id="Qwen-Image-Edit", recording_id=run_id)
-        elif hasattr(rr, "RecordingStream"):
-            rec = rr.RecordingStream(application_id="Qwen-Image-Edit", recording_id=run_id)
-        else:
-            rr.init("Qwen-Image-Edit", recording_id=run_id, spawn=False)
-            rec = rr
-            
-        # Log inputs
-        for i, img in enumerate(pil_images):
-            rec.log(f"images/input_{i}", rr.Image(np.array(img)))
-            
-        # Log result
-        rec.log("images/edited_result", rr.Image(np.array(result_image)))
-        
-        # Save RRD
-        rrd_path = os.path.join(TMP_DIR, f"{run_id}.rrd")
-        rec.save(rrd_path)
-        
-        return rrd_path, seed, gr.update(value=output_image_path, visible=True)
+        return result_image, seed
 
     except Exception as e:
         raise e
@@ -288,13 +247,15 @@ def infer(
 @spaces.GPU
 def infer_example(images, prompt, lora_adapter):
     if not images:
-        return None, 0, gr.update(visible=False)
+        return None, 0
     
     if isinstance(images, str):
-        images = [images]
+        images_list = [images]
+    else:
+        images_list = images
         
-    result_rrd, seed, img_path = infer(
-        images=images,
+    result, seed = infer(
+        images=images_list,
         prompt=prompt,
         lora_adapter=lora_adapter,
         seed=0,
@@ -302,7 +263,7 @@ def infer_example(images, prompt, lora_adapter):
         guidance_scale=1.0,
         steps=4
     )
-    return result_rrd, seed, img_path
+    return result, seed
 
 css="""
 #col-container {
@@ -315,7 +276,7 @@ css="""
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
         gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Upload one or more images.")
+        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Upload one or more images (required for tasks like Any-Pose or Light-Migration).")
 
         with gr.Row(equal_height=True):
             with gr.Column():
@@ -337,10 +298,7 @@ with gr.Blocks() as demo:
                 run_button = gr.Button("Edit Image", variant="primary")
 
             with gr.Column():
-                rerun_output = Rerun(
-                    label="Rerun Visualization", 
-                    height=354
-                )
+                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=353)
                 
                 with gr.Row():
                     lora_adapter = gr.Dropdown(
@@ -354,34 +312,27 @@ with gr.Blocks() as demo:
                     randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
                     guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
                     steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
-
-
-        with gr.Accordion("Run Edit Image and Download Result 📂", open=False, visible=True):
-            download_button = gr.DownloadButton(
-                label="Download Image", 
-                visible=False,
-                )
         
         gr.Examples(
             examples=[
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
                 [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
-                [["examples/P1.jpg", "examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it. The new pose should be pixel accurate to the pose we are trying to copy. The position of the arms and head and legs should be the same as the pose we are trying to copy. Change the field of view and angle to match exactly image 2. Head tilt and eye gaze pose should match the person in image 2.", "Any-Pose"],
+                [["examples/P1.jpg", "examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it.", "Any-Pose"],
             ],
             inputs=[images, prompt, lora_adapter],
-            outputs=[rerun_output, seed, download_button],
+            outputs=[output_image, seed],
             fn=infer_example,
             cache_examples=False,
             label="Examples"
         )
         
-        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast)This is still an experimental Space for Qwen-Image-Edit-2511.")
+        gr.Markdown("Note: Some adapters (like Any-Pose and Light-Migration) require uploading multiple images to the gallery.")
 
     run_button.click(
         fn=infer,
         inputs=[images, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[rerun_output, seed, download_button]
+        outputs=[output_image, seed]
     )
 
 if __name__ == "__main__":
