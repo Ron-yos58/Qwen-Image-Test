@@ -303,7 +303,7 @@ with gr.Blocks() as demo:
                 run_button = gr.Button("Edit Image", variant="primary")
 
             with gr.Column():
-                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=360)
+                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=363)
                 
                 with gr.Row():
                     lora_adapter = gr.Dropdown(
