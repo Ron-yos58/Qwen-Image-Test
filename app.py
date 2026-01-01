@@ -333,7 +333,7 @@ with gr.Blocks() as demo:
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
                 [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
-                [["examples/MT.png"], "Paint with manga tone.", "Manga-Tone"],
+                [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
                 [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
                 [["examples/P1.jpg", "examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it.", "Any-Pose"],
