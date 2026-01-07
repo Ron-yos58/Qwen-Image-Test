@@ -148,7 +148,7 @@ ADAPTER_SPECS = {
     },
     "Anything2Real": {
         "repo": "lrzjason/Anything2Real_2601",
-        "weights": "anything2real_2601_A_final.safetensors",
+        "weights": "anything2real_2601.safetensors",
         "adapter_name": "anything2real"
     },
 }
