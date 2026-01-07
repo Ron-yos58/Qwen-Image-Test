@@ -121,10 +121,10 @@ ADAPTER_SPECS = {
         "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
         "adapter_name": "photo-to-anime"
     },
-    "Any-Pose": {
-        "repo": "lilylilith/AnyPose",
-        "weights": "2511-AnyPose-helper-00006000.safetensors",
-        "adapter_name": "any-pose"
+    "Anime-V2": {
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Anime",
+        "weights": "Qwen-Image-Edit-2511-Anime-2000.safetensors",
+        "adapter_name": "anime-v2"
     },
     "Light-Migration": {
         "repo": "dx8152/Qwen-Edit-2509-Light-Migration",
@@ -145,6 +145,11 @@ ADAPTER_SPECS = {
         "repo": "nappa114514/Qwen-Image-Edit-2509-Manga-Tone",
         "weights": "tone001.safetensors",
         "adapter_name": "manga-tone"
+    },
+    "Anything2Real": {
+        "repo": "lrzjason/Anything2Real_2601",
+        "weights": "anything2real_2601_A_final.safetensors",
+        "adapter_name": "anything2real"
     },
 }
 
@@ -335,8 +340,9 @@ with gr.Blocks() as demo:
                 [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
+                [["examples/R1.jpg"], "Change the picture to realistic photograph.", "Anything2Real"],
                 [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
-                [["examples/P1.jpg", "examples/P2.jpg"], "Make the person in image 1 do the exact same pose of the person in image 2. Changing the style and background of the image of the person in image 1 is undesirable, so don't do it.", "Any-Pose"],
+                [["examples/P1.jpg"], "Transform into anime (while preserving the background and remaining elements maintaining realism and original details.)", "Anime-V2"],
             ],
             inputs=[images, prompt, lora_adapter],
             outputs=[output_image, seed],
