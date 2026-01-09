@@ -40,3 +40,4 @@ examples/MC2.png filter=lfs diff=lfs merge=lfs -text
 examples/MT.jpg filter=lfs diff=lfs merge=lfs -text
 examples/R1.jpg filter=lfs diff=lfs merge=lfs -text
 examples/Z2.jpg filter=lfs diff=lfs merge=lfs -text
+examples/PP1.jpg filter=lfs diff=lfs merge=lfs -text
