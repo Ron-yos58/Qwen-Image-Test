@@ -161,6 +161,11 @@ ADAPTER_SPECS = {
         "weights": "Qwen-Image-Edit-2511-Polaroid-Photo.safetensors",
         "adapter_name": "polaroid-photo"
     },
+    "Cinematic-0": {
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Cinematic-Stock",
+        "weights": "Qwen-Image-Edit-2511-Cinematic.safetensors",
+        "adapter_name": "cinematic-stock"
+    },
 }
 
 LOADED_ADAPTERS = set()
@@ -349,6 +354,7 @@ with gr.Blocks() as demo:
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
                 [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
                 [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪❤︎‬ preserving realistic texture and details", "Polaroid-Photo"],
+                [["examples/CS1.jpg"], "Transform the image into a cinematic shot enhancing details and textures,transform the image into a cinematic shot enhancing details and textures.", "Cinematic-0"],
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
                 [["examples/Z2.jpg"], "Back-left quarter view.", "Fal-Multiple-Angles"],
                 [["examples/Z3.jpg"], "Left side view, Balanced, standard.", "Fal-Multiple-Angles"],
