@@ -162,7 +162,7 @@ ADAPTER_SPECS = {
         "adapter_name": "polaroid-photo"
     },
     "Unblur-Anything": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Unblur-Anything",
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Unblur-Upscale",
         "weights": "Qwen-Image-Edit-2511-Unblur-Anything.safetensors",
         "adapter_name": "unblur-anything"
     },
