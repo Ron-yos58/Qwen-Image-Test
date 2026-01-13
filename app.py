@@ -161,6 +161,11 @@ ADAPTER_SPECS = {
         "weights": "Qwen-Image-Edit-2511-Polaroid-Photo.safetensors",
         "adapter_name": "polaroid-photo"
     },
+    "Unblur-Anything": {
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Unblur-Anything",
+        "weights": "Qwen-Image-Edit-2511-Unblur-Anything.safetensors",
+        "adapter_name": "unblur-anything"
+    },
 }
 
 LOADED_ADAPTERS = set()
@@ -355,6 +360,7 @@ with gr.Blocks() as demo:
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
                 [["examples/R1.jpg"], "Change the picture to realistic photograph.", "Anything2Real"],
+                [["examples/UA.jpeg"], "Unblur and upscale the image to high resolution while preserving sharp details natural textures and realistic colors.", "Unblur-Anything"],
                 [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
                 [["examples/P1.jpg"], "Transform into anime (while preserving the background and remaining elements maintaining realism and original details.)", "Anime-V2"],
             ],
