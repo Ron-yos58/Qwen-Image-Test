@@ -166,6 +166,11 @@ ADAPTER_SPECS = {
         "weights": "Qwen-Image-Edit-2511-Unblur-Anything.safetensors",
         "adapter_name": "unblur-anything"
     },
+    "Midnight-Noir-Eyes-Spotlight": {
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight",
+        "weights": "Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight.safetensors",
+        "adapter_name": "midnight-noir-eyes-spotlight"
+    },    
 }
 
 LOADED_ADAPTERS = set()
@@ -358,6 +363,7 @@ with gr.Blocks() as demo:
                 [["examples/Z2.jpg"], "Back-left quarter view.", "Fal-Multiple-Angles"],
                 [["examples/Z3.jpg"], "Left side view, Balanced, standard.", "Fal-Multiple-Angles"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
+                [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
                 [["examples/R1.jpg"], "Change the picture to realistic photograph.", "Anything2Real"],
                 [["examples/UA.jpeg"], "Unblur and upscale the image to high resolution while preserving sharp details natural textures and realistic colors.", "Unblur-Anything"],
