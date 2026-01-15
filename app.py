@@ -163,7 +163,7 @@ ADAPTER_SPECS = {
     },
     "Unblur-Anything": {
         "repo": "prithivMLmods/Qwen-Image-Edit-2511-Unblur-Upscale",
-        "weights": "Qwen-Image-Edit-Unblur-Upscale_20.safetensors",
+        "weights": "Qwen-Image-Edit-Unblur-Upscale_15.safetensors",
         "adapter_name": "unblur-anything"
     },
     "Midnight-Noir-Eyes-Spotlight": {
