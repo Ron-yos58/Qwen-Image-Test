@@ -171,11 +171,11 @@ ADAPTER_SPECS = {
         "weights": "Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight.safetensors",
         "adapter_name": "midnight-noir-eyes-spotlight"
     },
-  #  "Hyper-Realistic-Portrait": {
-  #     "repo": "prithivMLmods/Qwen-Image-Edit-2511-Hyper-Realistic-Portrait",
-  #      "weights": "Qwen-Image-Edit-2511-Hyper-Realistic-Portrait.safetensors",
-  #      "adapter_name": "hyper-realistic-portrait"
-  # },     
+    "Hyper-Realistic-Portrait": {
+       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Hyper-Realistic-Portrait",
+       "weights": " HRP_20.safetensors",
+       "adapter_name": "hyper-realistic-portrait"
+   },     
 }
 
 LOADED_ADAPTERS = set()
@@ -367,7 +367,7 @@ with gr.Blocks() as demo:
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
                 [["examples/Z2.jpg"], "Back-left quarter view.", "Fal-Multiple-Angles"],
                 [["examples/Z3.jpg"], "Left side view, Balanced, standard.", "Fal-Multiple-Angles"],
-               # [["examples/HRP.jpg"], "Transform into a hyper-realistic face portrait.", "Hyper-Realistic-Portrait"],
+                [["examples/HRP.jpg"], "Transform into a hyper-realistic face portrait.", "Hyper-Realistic-Portrait"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
                 [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
