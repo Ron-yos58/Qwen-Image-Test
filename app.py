@@ -173,7 +173,7 @@ ADAPTER_SPECS = {
     },
     "Hyper-Realistic-Portrait": {
        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Hyper-Realistic-Portrait",
-       "weights": " HRP_20.safetensors",
+       "weights": "HRP_20.safetensors",
        "adapter_name": "hyper-realistic-portrait"
    },     
 }
