@@ -1,395 +1,159 @@
 import os
-import gc
-import gradio as gr
-import numpy as np
 import spaces
+import gc
+import shutil
+import gradio as gr
 import torch
-import random
-from PIL import Image
-from typing import Iterable
-from gradio.themes import Soft
-from gradio.themes.utils import colors, fonts, sizes
+import safetensors.torch
+from huggingface_hub import hf_hub_download, HfApi, login
+from accelerate import init_empty_weights
 
-colors.orange_red = colors.Color(
-    name="orange_red",
-    c50="#FFF0E5",
-    c100="#FFE0CC",
-    c200="#FFC299",
-    c300="#FFA366",
-    c400="#FF8533",
-    c500="#FF4500",
-    c600="#E63E00",
-    c700="#CC3700",
-    c800="#B33000",
-    c900="#992900",
-    c950="#802200",
-)
-
-class OrangeRedTheme(Soft):
-    def __init__(
-        self,
-        *,
-        primary_hue: colors.Color | str = colors.gray,
-        secondary_hue: colors.Color | str = colors.orange_red,
-        neutral_hue: colors.Color | str = colors.slate,
-        text_size: sizes.Size | str = sizes.text_lg,
-        font: fonts.Font | str | Iterable[fonts.Font | str] = (
-            fonts.GoogleFont("Outfit"), "Arial", "sans-serif",
-        ),
-        font_mono: fonts.Font | str | Iterable[fonts.Font | str] = (
-            fonts.GoogleFont("IBM Plex Mono"), "ui-monospace", "monospace",
-        ),
-    ):
-        super().__init__(
-            primary_hue=primary_hue,
-            secondary_hue=secondary_hue,
-            neutral_hue=neutral_hue,
-            text_size=text_size,
-            font=font,
-            font_mono=font_mono,
-        )
-        super().set(
-            background_fill_primary="*primary_50",
-            background_fill_primary_dark="*primary_900",
-            body_background_fill="linear-gradient(135deg, *primary_200, *primary_100)",
-            body_background_fill_dark="linear-gradient(135deg, *primary_900, *primary_800)",
-            button_primary_text_color="white",
-            button_primary_text_color_hover="white",
-            button_primary_background_fill="linear-gradient(90deg, *secondary_500, *secondary_600)",
-            button_primary_background_fill_hover="linear-gradient(90deg, *secondary_600, *secondary_700)",
-            button_primary_background_fill_dark="linear-gradient(90deg, *secondary_600, *secondary_700)",
-            button_primary_background_fill_hover_dark="linear-gradient(90deg, *secondary_500, *secondary_600)",
-            button_secondary_text_color="black",
-            button_secondary_text_color_hover="white",
-            button_secondary_background_fill="linear-gradient(90deg, *primary_300, *primary_300)",
-            button_secondary_background_fill_hover="linear-gradient(90deg, *primary_400, *primary_400)",
-            button_secondary_background_fill_dark="linear-gradient(90deg, *primary_500, *primary_600)",
-            button_secondary_background_fill_hover_dark="linear-gradient(90deg, *primary_500, *primary_500)",
-            slider_color="*secondary_500",
-            slider_color_dark="*secondary_600",
-            block_title_text_weight="600",
-            block_border_width="3px",
-            block_shadow="*shadow_drop_lg",
-            button_primary_shadow="*shadow_drop_lg",
-            button_large_padding="11px",
-            color_accent_soft="*primary_100",
-            block_label_background_fill="*primary_200",
-        )
-
-orange_red_theme = OrangeRedTheme()
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
-print("torch.__version__ =", torch.__version__)
-print("Using device:", device)
-
-from diffusers import FlowMatchEulerDiscreteScheduler
-from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
+# --- Imports from your local modules ---
+# Ensure the folder 'qwenimage' is present in the root directory
 from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
-from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
-dtype = torch.bfloat16
-
-pipe = QwenImageEditPlusPipeline.from_pretrained(
-    "Qwen/Qwen-Image-Edit-2511",
-    transformer=QwenImageTransformer2DModel.from_pretrained(
-        "linoyts/Qwen-Image-Edit-Rapid-AIO",
-        subfolder='transformer',
-        torch_dtype=dtype,
-        device_map='cuda'
-    ),
-    torch_dtype=dtype
-).to(device)
-
-try:
-    pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
-    print("Flash Attention 3 Processor set successfully.")
-except Exception as e:
-    print(f"Warning: Could not set FA3 processor: {e}")
-
-MAX_SEED = np.iinfo(np.int32).max
-
-ADAPTER_SPECS = {
-    "Multiple-Angles": {
-        "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
-        "weights": "镜头转换.safetensors",
-        "adapter_name": "multiple-angles"
-    },
-    "Photo-to-Anime": {
-        "repo": "autoweeb/Qwen-Image-Edit-2509-Photo-to-Anime",
-        "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
-        "adapter_name": "photo-to-anime"
-    },
-    "Anime-V2": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Anime",
-        "weights": "Qwen-Image-Edit-2511-Anime-2000.safetensors",
-        "adapter_name": "anime-v2"
-    },
-    "Light-Migration": {
-        "repo": "dx8152/Qwen-Edit-2509-Light-Migration",
-        "weights": "参考色调.safetensors",
-        "adapter_name": "light-migration"
-    },
-    "Upscaler": {
-        "repo": "starsfriday/Qwen-Image-Edit-2511-Upscale2K",
-        "weights": "qwen_image_edit_2511_upscale.safetensors",
-        "adapter_name": "upscale-2k"
-    },
-    "Style-Transfer": {
-        "repo": "zooeyy/Style-Transfer",
-        "weights": "Style Transfer-Alpha-V0.1.safetensors",
-        "adapter_name": "style-transfer"
-    },
-    "Manga-Tone": {
-        "repo": "nappa114514/Qwen-Image-Edit-2509-Manga-Tone",
-        "weights": "tone001.safetensors",
-        "adapter_name": "manga-tone"
-    },
-    "Anything2Real": {
-        "repo": "lrzjason/Anything2Real_2601",
-        "weights": "anything2real_2601.safetensors",
-        "adapter_name": "anything2real"
-    },
-    "Fal-Multiple-Angles": {
-        "repo": "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA",
-        "weights": "qwen-image-edit-2511-multiple-angles-lora.safetensors",
-        "adapter_name": "fal-multiple-angles"
-    },
-    "Polaroid-Photo": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Polaroid-Photo",
-        "weights": "Qwen-Image-Edit-2511-Polaroid-Photo.safetensors",
-        "adapter_name": "polaroid-photo"
-    },
-    "Unblur-Anything": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Unblur-Upscale",
-        "weights": "Qwen-Image-Edit-Unblur-Upscale_15.safetensors",
-        "adapter_name": "unblur-anything"
-    },
-    "Midnight-Noir-Eyes-Spotlight": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight",
-        "weights": "Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight.safetensors",
-        "adapter_name": "midnight-noir-eyes-spotlight"
-    },
-    "Hyper-Realistic-Portrait": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Hyper-Realistic-Portrait",
-       "weights": "HRP_20.safetensors",
-       "adapter_name": "hyper-realistic-portrait"
-   },     
+# Configuration for the specific Qwen Transformer
+TRANSFORMER_CONFIG = {
+    "attention_head_dim": 128,
+    "axes_dims_rope": [16, 56, 56],
+    "guidance_embeds": False,
+    "in_channels": 64,
+    "joint_attention_dim": 3584,
+    "num_attention_heads": 24,
+    "num_layers": 60,
+    "out_channels": 16,
+    "patch_size": 2
 }
 
-LOADED_ADAPTERS = set()
-
-def update_dimensions_on_upload(image):
-    if image is None:
-        return 1024, 1024
+@spaces.GPU(duration=300)
+def convert_and_upload(hf_token, target_repo_id, private_repo):
+    """
+    Downloads raw weights, converts keys, saves locally, and uploads to HF.
+    """
+    local_dir = "converted_qwen_transformer"
+    source_repo = "Phr00t/Qwen-Image-Edit-Rapid-AIO"
+    source_filename = "v19/Qwen-Rapid-AIO-NSFW-v19.safetensors"
     
-    original_width, original_height = image.size
+    yield f"🚀 Starting process...\nAuthenticating with Hugging Face..."
     
-    if original_width > original_height:
-        new_width = 1024
-        aspect_ratio = original_height / original_width
-        new_height = int(new_width * aspect_ratio)
-    else:
-        new_height = 1024
-        aspect_ratio = original_width / original_height
-        new_width = int(new_height * aspect_ratio)
-        
-    new_width = (new_width // 8) * 8
-    new_height = (new_height // 8) * 8
+    if not hf_token:
+        raise gr.Error("Please provide a Write-enabled Hugging Face Token.")
     
-    return new_width, new_height
-
-@spaces.GPU
-def infer(
-    images,
-    prompt,
-    lora_adapter,
-    seed,
-    randomize_seed,
-    guidance_scale,
-    steps,
-    progress=gr.Progress(track_tqdm=True)
-):
-    gc.collect()
-    torch.cuda.empty_cache()
-
-    if not images:
-        raise gr.Error("Please upload at least one image to edit.")
-
-    pil_images = []
-    if images is not None:
-        for item in images:
-            try:
-                if isinstance(item, tuple) or isinstance(item, list):
-                    path_or_img = item[0]
-                else:
-                    path_or_img = item
-
-                if isinstance(path_or_img, str):
-                    pil_images.append(Image.open(path_or_img).convert("RGB"))
-                elif isinstance(path_or_img, Image.Image):
-                    pil_images.append(path_or_img.convert("RGB"))
-                else:
-                    pil_images.append(Image.open(path_or_img.name).convert("RGB"))
-            except Exception as e:
-                print(f"Skipping invalid image item: {e}")
-                continue
-
-    if not pil_images:
-        raise gr.Error("Could not process uploaded images.")
-
-    spec = ADAPTER_SPECS.get(lora_adapter)
-    if not spec:
-        raise gr.Error(f"Configuration not found for: {lora_adapter}")
-
-    adapter_name = spec["adapter_name"]
-
-    if adapter_name not in LOADED_ADAPTERS:
-        print(f"--- Downloading and Loading Adapter: {lora_adapter} ---")
-        try:
-            pipe.load_lora_weights(
-                spec["repo"], 
-                weight_name=spec["weights"], 
-                adapter_name=adapter_name
-            )
-            LOADED_ADAPTERS.add(adapter_name)
-        except Exception as e:
-            raise gr.Error(f"Failed to load adapter {lora_adapter}: {e}")
-    else:
-        print(f"--- Adapter {lora_adapter} is already loaded. ---")
-
-    pipe.set_adapters([adapter_name], adapter_weights=[1.0])
-
-    if randomize_seed:
-        seed = random.randint(0, MAX_SEED)
-
-    generator = torch.Generator(device=device).manual_seed(seed)
-    negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
-
-    width, height = update_dimensions_on_upload(pil_images[0])
-
     try:
-        result_image = pipe(
-            image=pil_images,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            height=height,
-            width=width,
-            num_inference_steps=steps,
-            generator=generator,
-            true_cfg_scale=guidance_scale,
-        ).images[0]
-        
-        return result_image, seed
-
+        login(token=hf_token)
+        api = HfApi(token=hf_token)
     except Exception as e:
-        raise e
-    finally:
-        gc.collect()
-        torch.cuda.empty_cache()
+        raise gr.Error(f"Authentication failed: {e}")
 
-@spaces.GPU
-def infer_example(images, prompt, lora_adapter):
-    if not images:
-        return None, 0
-    
-    if isinstance(images, str):
-        images_list = [images]
-    else:
-        images_list = images
+    # 1. Download
+    yield f"📥 Downloading {source_filename} from {source_repo}..."
+    try:
+        checkpoint_path = hf_hub_download(repo_id=source_repo, filename=source_filename)
+    except Exception as e:
+        raise gr.Error(f"Download failed: {e}")
+
+    # 2. Initialize Empty Model
+    yield "🏗️ Initializing empty model architecture..."
+    with init_empty_weights():
+        model = QwenImageTransformer2DModel(**TRANSFORMER_CONFIG)
+
+    # 3. Load and Filter Keys
+    yield "🔑 Loading state dict and filtering keys (removing 'model.diffusion_model.')..."
+    try:
+        state_dict = safetensors.torch.load_file(checkpoint_path, device="cpu")
         
-    result, seed = infer(
-        images=images_list,
-        prompt=prompt,
-        lora_adapter=lora_adapter,
-        seed=0,
-        randomize_seed=True,
-        guidance_scale=1.0,
-        steps=4
-    )
-    return result, seed
+        new_state_dict = {}
+        prefix = "model.diffusion_model."
+        ignored_keys = ["__index_timestep_zero__", "iteration", "global_step"]
 
-css="""
-#col-container {
-    margin: 0 auto;
-    max-width: 1000px;
-}
-#main-title h1 {font-size: 2.3em !important;}
+        for key, value in state_dict.items():
+            if key in ignored_keys:
+                continue
+            if key.startswith(prefix):
+                new_key = key[len(prefix):]
+                new_state_dict[new_key] = value
+        
+        del state_dict
+        gc.collect()
+    except Exception as e:
+        raise gr.Error(f"Error processing keys: {e}")
+
+    # 4. Load Weights into Model
+    yield "⚖️ Loading weights into the model object..."
+    try:
+        # assign=True is needed for accelerate's init_empty_weights
+        model.load_state_dict(new_state_dict, assign=True, strict=False)
+        del new_state_dict
+        gc.collect()
+    except Exception as e:
+        raise gr.Error(f"Error loading weights into model: {e}")
+
+    # 5. Save Locally
+    if os.path.exists(local_dir):
+        shutil.rmtree(local_dir)
+    os.makedirs(local_dir, exist_ok=True)
+    
+    yield f"💾 Saving converted model to local directory: {local_dir}..."
+    try:
+        # This saves both config.json and diffusion_pytorch_model.safetensors
+        model.save_pretrained(local_dir, safe_serialization=True)
+    except Exception as e:
+        raise gr.Error(f"Error saving local model: {e}")
+
+    # 6. Upload to Hugging Face
+    yield f"☁️ Uploading to Hugging Face Repo: {target_repo_id}..."
+    try:
+        # Create repo if it doesn't exist
+        api.create_repo(repo_id=target_repo_id, private=private_repo, exist_ok=True)
+        
+        api.upload_folder(
+            folder_path=local_dir,
+            repo_id=target_repo_id,
+            commit_message="Upload converted Qwen-Image-Edit Transformer"
+        )
+    except Exception as e:
+        raise gr.Error(f"Upload failed: {e}")
+        
+    # Cleanup
+    shutil.rmtree(local_dir)
+    gc.collect()
+    
+    yield f"✅ Success! Model uploaded to https://huggingface.co/{target_repo_id}"
+
+# --- Gradio UI ---
+
+css = """
+#col-container { max_width: 700px; margin: 0 auto; }
 """
 
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
-        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Upload one or more images.")
-
-        with gr.Row(equal_height=True):
-            with gr.Column():
-                images = gr.Gallery(
-                    label="Upload Images", 
-                    type="filepath", 
-                    columns=2, 
-                    rows=1, 
-                    height=300,
-                    allow_preview=True
-                )
-                
-                prompt = gr.Text(
-                    label="Edit Prompt",
-                    show_label=True,
-                    placeholder="e.g., transform into anime..",
-                )
-
-                run_button = gr.Button("Edit Image", variant="primary")
-
-            with gr.Column():
-                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=363)
-                
-                with gr.Row():
-                    lora_adapter = gr.Dropdown(
-                        label="Choose Editing Style",
-                        choices=list(ADAPTER_SPECS.keys()),
-                        value="Photo-to-Anime"
-                    )
-                
-                with gr.Accordion("Advanced Settings", open=False, visible=False):
-                    seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
-                    randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
-                    guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
-                    steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
-        
-        gr.Examples(
-            examples=[
-                [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
-                [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
-                [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
-                [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
-                [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
-                [["examples/Z2.jpg"], "Back-left quarter view.", "Fal-Multiple-Angles"],
-                [["examples/Z3.jpg"], "Left side view, Balanced, standard.", "Fal-Multiple-Angles"],
-                [["examples/HRP.jpg"], "Transform into a hyper-realistic face portrait.", "Hyper-Realistic-Portrait"],
-                [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
-                [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
-                [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
-                [["examples/R1.jpg"], "Change the picture to realistic photograph.", "Anything2Real"],
-                [["examples/UA.jpeg"], "Unblur and upscale.", "Unblur-Anything"],
-                [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
-                [["examples/P1.jpg"], "Transform into anime (while preserving the background and remaining elements maintaining realism and original details.)", "Anime-V2"],
-            ],
-            inputs=[images, prompt, lora_adapter],
-            outputs=[output_image, seed],
-            fn=infer_example,
-            cache_examples=False,
-            label="Examples"
+        gr.Markdown("# 🔄 Qwen Transformer Converter & Uploader")
+        gr.Markdown(
+            "This tool downloads the raw checkpoints for `Qwen-Image-Edit`, extracts the transformer, "
+            "fixes the key names, and uploads the clean `diffusers`-ready model to your Hugging Face account."
         )
         
-        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast)This is still an experimental Space for Qwen-Image-Edit-2511.")
+        with gr.Group():
+            hf_token = gr.Textbox(
+                label="Hugging Face Token (Write Access)", 
+                placeholder="hf_...", 
+                type="password"
+            )
+            target_repo = gr.Textbox(
+                label="Target Repository ID", 
+                placeholder="username/my-converted-qwen-transformer"
+            )
+            is_private = gr.Checkbox(label="Make Repo Private", value=True)
+            
+        convert_btn = gr.Button("Convert & Upload", variant="primary")
+        status_output = gr.Textbox(label="Status Log", interactive=False, lines=6)
 
-    run_button.click(
-        fn=infer,
-        inputs=[images, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[output_image, seed]
+    convert_btn.click(
+        fn=convert_and_upload,
+        inputs=[hf_token, target_repo, is_private],
+        outputs=[status_output]
     )
 
 if __name__ == "__main__":
-    demo.queue(max_size=30).launch(css=css, theme=orange_red_theme, mcp_server=True, ssr_mode=False, show_error=True)
+    demo.queue().launch(theme=gr.themes.Soft(), css=css)
