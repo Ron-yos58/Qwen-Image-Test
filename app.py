@@ -361,13 +361,11 @@ with gr.Blocks() as demo:
         gr.Examples(
             examples=[
                 [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
+                [["examples/HRP.jpg"], "Transform into a hyper-realistic face portrait.", "Hyper-Realistic-Portrait"],
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
                 [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
                 [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
-                [["examples/Z2.jpg"], "Back-left quarter view.", "Fal-Multiple-Angles"],
-                [["examples/Z3.jpg"], "Left side view, Balanced, standard.", "Fal-Multiple-Angles"],
-                [["examples/HRP.jpg"], "Transform into a hyper-realistic face portrait.", "Hyper-Realistic-Portrait"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
                 [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
