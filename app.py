@@ -94,8 +94,8 @@ dtype = torch.bfloat16
 pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2511",
     transformer=QwenImageTransformer2DModel.from_pretrained(
-        "linoyts/Qwen-Image-Edit-Rapid-AIO",
-        subfolder='transformer',
+        "prithivMLmods/Qwen-Image-Edit-Rapid-AIO-V19",
+        #subfolder='transformer',
         torch_dtype=dtype,
         device_map='cuda'
     ),
