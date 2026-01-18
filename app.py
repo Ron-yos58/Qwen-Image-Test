@@ -95,7 +95,6 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2511",
     transformer=QwenImageTransformer2DModel.from_pretrained(
         "prithivMLmods/Qwen-Image-Edit-Rapid-AIO-V19",
-        #subfolder='transformer',
         torch_dtype=dtype,
         device_map='cuda'
     ),
@@ -176,6 +175,11 @@ ADAPTER_SPECS = {
        "weights": "HRP_20.safetensors",
        "adapter_name": "hyper-realistic-portrait"
    },     
+    "Ultra-Realistic-Portrait": {
+       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Ultra-Realistic-Portrait",
+       "weights": "URP_20.safetensors",
+       "adapter_name": "ultra-realistic-portrait"
+   },       
 }
 
 LOADED_ADAPTERS = set()
@@ -367,6 +371,7 @@ with gr.Blocks() as demo:
                 [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
+                [["examples/URP.jpg"], "ultra-realistic portrait.", "Ultra-Realistic-Portrait"],
                 [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
                 [["examples/R1.jpg"], "Change the picture to realistic photograph.", "Anything2Real"],
