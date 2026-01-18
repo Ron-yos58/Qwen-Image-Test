@@ -177,7 +177,7 @@ ADAPTER_SPECS = {
    },     
     "Ultra-Realistic-Portrait": {
        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Ultra-Realistic-Portrait",
-       "weights": "URP_20.safetensors",
+       "weights": "URP_15.safetensors",
        "adapter_name": "ultra-realistic-portrait"
    },       
 }
