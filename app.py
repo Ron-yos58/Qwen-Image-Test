@@ -179,7 +179,12 @@ ADAPTER_SPECS = {
        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Ultra-Realistic-Portrait",
        "weights": "URP_20.safetensors",
        "adapter_name": "ultra-realistic-portrait"
-   },       
+   },     
+    "Pixar-Inspired-3D": {
+       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Pixar-Inspired-3D",
+       "weights": "PI3_20.safetensors",
+       "adapter_name": "pi3"
+   },     
 }
 
 LOADED_ADAPTERS = set()
@@ -370,6 +375,7 @@ with gr.Blocks() as demo:
                 [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
                 [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
+                [["examples/PI.jpg"], "Transform it into Pixar-inspired 3D.", "Pixar-Inspired-3D"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
                 [["examples/URP.jpg"], "ultra-realistic portrait.", "Ultra-Realistic-Portrait"],
                 [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
