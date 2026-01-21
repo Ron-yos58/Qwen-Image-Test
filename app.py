@@ -184,7 +184,13 @@ ADAPTER_SPECS = {
        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Pixar-Inspired-3D",
        "weights": "PI3_20.safetensors",
        "adapter_name": "pi3"
+   },
+    "Noir-Comic-Book": {
+       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Noir-Comic-Book-Panel",
+       "weights": "Noir-Comic-Book-Panel_20.safetensors",
+       "adapter_name": "ncb"
    },     
+    
 }
 
 LOADED_ADAPTERS = set()
@@ -377,6 +383,7 @@ with gr.Blocks() as demo:
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
                 [["examples/PI.jpg"], "Transform it into Pixar-inspired 3D.", "Pixar-Inspired-3D"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
+                [["examples/NCB.jpg"], "Transform into a noir comic book style.", "Noir-Comic-Book"],
                 [["examples/URP.jpg"], "ultra-realistic portrait.", "Ultra-Realistic-Portrait"],
                 [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
                 [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
