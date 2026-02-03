@@ -1,96 +1,27 @@
-import os
-import gc
 import gradio as gr
 import numpy as np
-import spaces
-import torch
 import random
+import torch
+import spaces
 from PIL import Image
-from typing import Iterable
-from gradio.themes import Soft
-from gradio.themes.utils import colors, fonts, sizes
 
-colors.orange_red = colors.Color(
-    name="orange_red",
-    c50="#FFF0E5",
-    c100="#FFE0CC",
-    c200="#FFC299",
-    c300="#FFA366",
-    c400="#FF8533",
-    c500="#FF4500",
-    c600="#E63E00",
-    c700="#CC3700",
-    c800="#B33000",
-    c900="#992900",
-    c950="#802200",
-)
-
-class OrangeRedTheme(Soft):
-    def __init__(
-        self,
-        *,
-        primary_hue: colors.Color | str = colors.gray,
-        secondary_hue: colors.Color | str = colors.orange_red,
-        neutral_hue: colors.Color | str = colors.slate,
-        text_size: sizes.Size | str = sizes.text_lg,
-        font: fonts.Font | str | Iterable[fonts.Font | str] = (
-            fonts.GoogleFont("Outfit"), "Arial", "sans-serif",
-        ),
-        font_mono: fonts.Font | str | Iterable[fonts.Font | str] = (
-            fonts.GoogleFont("IBM Plex Mono"), "ui-monospace", "monospace",
-        ),
-    ):
-        super().__init__(
-            primary_hue=primary_hue,
-            secondary_hue=secondary_hue,
-            neutral_hue=neutral_hue,
-            text_size=text_size,
-            font=font,
-            font_mono=font_mono,
-        )
-        super().set(
-            background_fill_primary="*primary_50",
-            background_fill_primary_dark="*primary_900",
-            body_background_fill="linear-gradient(135deg, *primary_200, *primary_100)",
-            body_background_fill_dark="linear-gradient(135deg, *primary_900, *primary_800)",
-            button_primary_text_color="white",
-            button_primary_text_color_hover="white",
-            button_primary_background_fill="linear-gradient(90deg, *secondary_500, *secondary_600)",
-            button_primary_background_fill_hover="linear-gradient(90deg, *secondary_600, *secondary_700)",
-            button_primary_background_fill_dark="linear-gradient(90deg, *secondary_600, *secondary_700)",
-            button_primary_background_fill_hover_dark="linear-gradient(90deg, *secondary_500, *secondary_600)",
-            button_secondary_text_color="black",
-            button_secondary_text_color_hover="white",
-            button_secondary_background_fill="linear-gradient(90deg, *primary_300, *primary_300)",
-            button_secondary_background_fill_hover="linear-gradient(90deg, *primary_400, *primary_400)",
-            button_secondary_background_fill_dark="linear-gradient(90deg, *primary_500, *primary_600)",
-            button_secondary_background_fill_hover_dark="linear-gradient(90deg, *primary_500, *primary_500)",
-            slider_color="*secondary_500",
-            slider_color_dark="*secondary_600",
-            block_title_text_weight="600",
-            block_border_width="3px",
-            block_shadow="*shadow_drop_lg",
-            button_primary_shadow="*shadow_drop_lg",
-            button_large_padding="11px",
-            color_accent_soft="*primary_100",
-            block_label_background_fill="*primary_200",
-        )
-
-orange_red_theme = OrangeRedTheme()
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
-print("torch.__version__ =", torch.__version__)
-print("Using device:", device)
-
+# --- Imports ---
 from diffusers import FlowMatchEulerDiscreteScheduler
-from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
-from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
-from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
+try:
+    from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
+    from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
+    from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
+except ImportError:
+    # Fallback/Instruction if custom packages are missing
+    raise ImportError("Please ensure the 'qwenimage' package is installed.")
 
+MAX_SEED = np.iinfo(np.int32).max
+
+# --- Configuration & Model Loading ---
 dtype = torch.bfloat16
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
+# 1. Load the Pipeline
 pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2511",
     transformer=QwenImageTransformer2DModel.from_pretrained(
@@ -101,323 +32,576 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
     torch_dtype=dtype
 ).to(device)
 
+# 2. Set Flash Attention 3 (if available)
 try:
     pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
     print("Flash Attention 3 Processor set successfully.")
 except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
-MAX_SEED = np.iinfo(np.int32).max
-
+# 3. Adapter Specs (Lighting LoRA)
 ADAPTER_SPECS = {
-    "Multiple-Angles": {
-        "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
-        "weights": "镜头转换.safetensors",
-        "adapter_name": "multiple-angles"
-    },
-    "Photo-to-Anime": {
-        "repo": "autoweeb/Qwen-Image-Edit-2509-Photo-to-Anime",
-        "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
-        "adapter_name": "photo-to-anime"
-    },
-    "Anime-V2": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Anime",
-        "weights": "Qwen-Image-Edit-2511-Anime-2000.safetensors",
-        "adapter_name": "anime-v2"
-    },
-    "Light-Migration": {
-        "repo": "dx8152/Qwen-Edit-2509-Light-Migration",
-        "weights": "参考色调.safetensors",
-        "adapter_name": "light-migration"
-    },
-    "Upscaler": {
-        "repo": "starsfriday/Qwen-Image-Edit-2511-Upscale2K",
-        "weights": "qwen_image_edit_2511_upscale.safetensors",
-        "adapter_name": "upscale-2k"
-    },
-    "Style-Transfer": {
-        "repo": "zooeyy/Style-Transfer",
-        "weights": "Style Transfer-Alpha-V0.1.safetensors",
-        "adapter_name": "style-transfer"
-    },
-    "Manga-Tone": {
-        "repo": "nappa114514/Qwen-Image-Edit-2509-Manga-Tone",
-        "weights": "tone001.safetensors",
-        "adapter_name": "manga-tone"
-    },
-    "Anything2Real": {
-        "repo": "lrzjason/Anything2Real_2601",
-        "weights": "anything2real_2601.safetensors",
-        "adapter_name": "anything2real"
-    },
-    "Fal-Multiple-Angles": {
-        "repo": "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA",
-        "weights": "qwen-image-edit-2511-multiple-angles-lora.safetensors",
-        "adapter_name": "fal-multiple-angles"
-    },
-    "Polaroid-Photo": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Polaroid-Photo",
-        "weights": "Qwen-Image-Edit-2511-Polaroid-Photo.safetensors",
-        "adapter_name": "polaroid-photo"
-    },
-    "Unblur-Anything": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Unblur-Upscale",
-        "weights": "Qwen-Image-Edit-Unblur-Upscale_15.safetensors",
-        "adapter_name": "unblur-anything"
-    },
-    "Midnight-Noir-Eyes-Spotlight": {
-        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight",
-        "weights": "Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight.safetensors",
-        "adapter_name": "midnight-noir-eyes-spotlight"
-    },
-    "Hyper-Realistic-Portrait": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Hyper-Realistic-Portrait",
-       "weights": "HRP_20.safetensors",
-       "adapter_name": "hyper-realistic-portrait"
-   },     
-    "Ultra-Realistic-Portrait": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Ultra-Realistic-Portrait",
-       "weights": "URP_20.safetensors",
-       "adapter_name": "ultra-realistic-portrait"
-   },     
-    "Pixar-Inspired-3D": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Pixar-Inspired-3D",
-       "weights": "PI3_20.safetensors",
-       "adapter_name": "pi3"
-   },
-    "Noir-Comic-Book": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Noir-Comic-Book-Panel",
-       "weights": "Noir-Comic-Book-Panel_20.safetensors",
-       "adapter_name": "ncb"
-   },  
-    "Any-light": {
-       "repo": "lilylilith/QIE-2511-MP-AnyLight",
-       "weights": "QIE-2511-AnyLight_.safetensors",
-       "adapter_name": "any-light"
-   }, 
-    "Studio-DeLight": {
-       "repo": "prithivMLmods/QIE-2511-Studio-DeLight",
-       "weights": "QIE-2511-Studio-DeLight-5000.safetensors",
-       "adapter_name": "studio-delight"
-   }, 
+    "Multi-Angle-Lighting": {
+        "repo": "dx8152/Qwen-Edit-2509-Multi-Angle-Lighting",
+        "weights": "多角度灯光-251116.safetensors",
+        "adapter_name": "multi-angle-lighting"
+    }
 }
 
-LOADED_ADAPTERS = set()
+# Global state to track currently loaded adapter
+CURRENT_LOADED_ADAPTER = None
 
-def update_dimensions_on_upload(image):
-    if image is None:
-        return 1024, 1024
-    
-    original_width, original_height = image.size
-    
-    if original_width > original_height:
-        new_width = 1024
-        aspect_ratio = original_height / original_width
-        new_height = int(new_width * aspect_ratio)
-    else:
-        new_height = 1024
-        aspect_ratio = original_width / original_height
-        new_width = int(new_height * aspect_ratio)
+# --- Logic: Mappings & Prompt Building ---
+
+# Lighting mappings for Azimuth (Horizontal)
+# 0 = Front, moving clockwise
+LIGHTING_AZIMUTH_MAP = {
+    0: "Light source from the Front",
+    45: "Light source from the Right Front",
+    90: "Light source from the Right",
+    135: "Light source from the Right Rear",
+    180: "Light source from the Rear",
+    225: "Light source from the Left Rear",
+    270: "Light source from the Left",
+    315: "Light source from the Left Front"
+}
+
+def snap_to_nearest_key(value, keys):
+    """Finds the nearest key in a list of numbers."""
+    return min(keys, key=lambda x: abs(x - value))
+
+def build_lighting_prompt(azimuth: float, elevation: float) -> str:
+    """
+    Constructs the specific text prompt required by the LoRA.
+    Logic:
+    1. Prioritize Vertical Extremes (>60° or <-60°)
+    2. Fallback to Horizontal Azimuth mappings
+    """
+    # 1. Vertical Extremes
+    if elevation >= 60:
+        return "Light source from Above"
+    if elevation <= -60:
+        return "Light source from Below"
         
-    new_width = (new_width // 8) * 8
-    new_height = (new_height // 8) * 8
-    
-    return new_width, new_height
+    # 2. Horizontal Snap
+    keys = list(LIGHTING_AZIMUTH_MAP.keys())
+    # Handle the 360 wrap-around for "Front" (0 vs 360)
+    # If azimuth is > 337.5, it snaps to 0
+    if azimuth > 337.5:
+        azimuth = 0
+        
+    azimuth_snapped = snap_to_nearest_key(azimuth, keys)
+    return LIGHTING_AZIMUTH_MAP[azimuth_snapped]
+
+# --- Inference Function ---
 
 @spaces.GPU
-def infer(
-    images,
-    prompt,
-    lora_adapter,
-    seed,
-    randomize_seed,
-    guidance_scale,
-    steps,
-    progress=gr.Progress(track_tqdm=True)
+def infer_lighting_edit(
+    image: Image.Image,
+    azimuth: float = 0.0,
+    elevation: float = 0.0,
+    seed: int = 0,
+    randomize_seed: bool = True,
+    guidance_scale: float = 5.0,
+    num_inference_steps: int = 4,
+    height: int = 1024,
+    width: int = 1024,
 ):
-    gc.collect()
-    torch.cuda.empty_cache()
+    global CURRENT_LOADED_ADAPTER
+    
+    # 1. Lazy Load Adapter
+    spec = ADAPTER_SPECS["Multi-Angle-Lighting"]
+    if CURRENT_LOADED_ADAPTER != spec["adapter_name"]:
+        print(f"⚙️ Lazy loading adapter: {spec['adapter_name']}...")
+        pipe.load_lora_weights(
+            spec["repo"],
+            weight_name=spec["weights"],
+            adapter_name=spec["adapter_name"]
+        )
+        pipe.set_adapters([spec["adapter_name"]], adapter_weights=[1.0])
+        CURRENT_LOADED_ADAPTER = spec["adapter_name"]
+    
+    # 2. Build Prompt
+    prompt = build_lighting_prompt(azimuth, elevation)
+    print(f"💡 Generated Prompt: {prompt}")
 
-    if not images:
-        raise gr.Error("Please upload at least one image to edit.")
-
-    pil_images = []
-    if images is not None:
-        for item in images:
-            try:
-                if isinstance(item, tuple) or isinstance(item, list):
-                    path_or_img = item[0]
-                else:
-                    path_or_img = item
-
-                if isinstance(path_or_img, str):
-                    pil_images.append(Image.open(path_or_img).convert("RGB"))
-                elif isinstance(path_or_img, Image.Image):
-                    pil_images.append(path_or_img.convert("RGB"))
-                else:
-                    pil_images.append(Image.open(path_or_img.name).convert("RGB"))
-            except Exception as e:
-                print(f"Skipping invalid image item: {e}")
-                continue
-
-    if not pil_images:
-        raise gr.Error("Could not process uploaded images.")
-
-    spec = ADAPTER_SPECS.get(lora_adapter)
-    if not spec:
-        raise gr.Error(f"Configuration not found for: {lora_adapter}")
-
-    adapter_name = spec["adapter_name"]
-
-    if adapter_name not in LOADED_ADAPTERS:
-        print(f"--- Downloading and Loading Adapter: {lora_adapter} ---")
-        try:
-            pipe.load_lora_weights(
-                spec["repo"], 
-                weight_name=spec["weights"], 
-                adapter_name=adapter_name
-            )
-            LOADED_ADAPTERS.add(adapter_name)
-        except Exception as e:
-            raise gr.Error(f"Failed to load adapter {lora_adapter}: {e}")
-    else:
-        print(f"--- Adapter {lora_adapter} is already loaded. ---")
-
-    pipe.set_adapters([adapter_name], adapter_weights=[1.0])
+    # 3. Prepare Inputs
+    if image is None:
+        raise gr.Error("Please upload an image first.")
 
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
-
     generator = torch.Generator(device=device).manual_seed(seed)
-    negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
 
-    width, height = update_dimensions_on_upload(pil_images[0])
+    pil_image = image.convert("RGB")
 
-    try:
-        result_image = pipe(
-            image=pil_images,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            height=height,
-            width=width,
-            num_inference_steps=steps,
-            generator=generator,
-            true_cfg_scale=guidance_scale,
-        ).images[0]
-        
-        return result_image, seed
-
-    except Exception as e:
-        raise e
-    finally:
-        gc.collect()
-        torch.cuda.empty_cache()
-
-@spaces.GPU
-def infer_example(images, prompt, lora_adapter):
-    if not images:
-        return None, 0
-    
-    if isinstance(images, str):
-        images_list = [images]
-    else:
-        images_list = images
-        
-    result, seed = infer(
-        images=images_list,
+    # 4. Run Inference
+    result = pipe(
+        image=[pil_image],
         prompt=prompt,
-        lora_adapter=lora_adapter,
-        seed=0,
-        randomize_seed=True,
-        guidance_scale=1.0,
-        steps=4
-    )
-    return result, seed
+        height=height,
+        width=width,
+        num_inference_steps=num_inference_steps,
+        generator=generator,
+        guidance_scale=guidance_scale,
+        num_images_per_prompt=1,
+    ).images[0]
 
-css="""
-#col-container {
-    margin: 0 auto;
-    max-width: 1000px;
-}
-#main-title h1 {font-size: 2.3em !important;}
+    return result, seed, prompt
+
+def update_dimensions_on_upload(image):
+    """Resizes image to nearest multiple of 8, max 1024, preserving aspect ratio."""
+    if image is None:
+        return 1024, 1024
+    w, h = image.size
+    
+    # Constraint: Max dimension 1024
+    if w > h:
+        new_w = 1024
+        new_h = int(new_w * (h / w))
+    else:
+        new_h = 1024
+        new_w = int(new_h * (w / h))
+        
+    # Constraint: Multiple of 8
+    new_w = (new_w // 8) * 8
+    new_h = (new_h // 8) * 8
+    
+    return new_w, new_h
+
+# --- Enhanced 3D Component ---
+
+class LightControl3D(gr.HTML):
+    """
+    Advanced 3D Light Controller using Three.js.
+    Features: Hemisphere guide, Beam visualization, Dynamic color feedback.
+    """
+    def __init__(self, value=None, imageUrl=None, **kwargs):
+        if value is None: value = {"azimuth": 0, "elevation": 0}
+        
+        # HTML Container
+        html_template = """
+        <div id="light-control-wrapper" style="width: 100%; height: 500px; position: relative; background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%); border-radius: 12px; overflow: hidden; border: 1px solid #333; box-shadow: inset 0 0 20px #000;">
+            <div id="prompt-badge" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); 
+                 background: rgba(0,0,0,0.8); border: 1px solid #FFD700; color: #FFD700; 
+                 padding: 8px 24px; border-radius: 30px; font-family: monospace; font-weight: bold; font-size: 14px; 
+                 z-index: 10; pointer-events: none; transition: all 0.2s ease;">
+                 Light Source: Front
+            </div>
+            
+            <div style="position: absolute; bottom: 15px; right: 15px; color: #555; font-size: 10px; font-family: sans-serif; pointer-events: none;">
+                Drag to rotate • Scroll to zoom
+            </div>
+        </div>
+        """
+        
+        # JavaScript Logic
+        js_on_load = """
+        (() => {
+            const wrapper = element.querySelector('#light-control-wrapper');
+            const badge = element.querySelector('#prompt-badge');
+            
+            const initScene = () => {
+                if (typeof THREE === 'undefined') { setTimeout(initScene, 100); return; }
+                
+                // --- 1. Scene & Camera ---
+                const scene = new THREE.Scene();
+                // No background color set here, letting CSS gradient show through
+                
+                const camera = new THREE.PerspectiveCamera(45, wrapper.clientWidth / wrapper.clientHeight, 0.1, 1000);
+                camera.position.set(4, 3, 4); // Isometric-ish view
+                camera.lookAt(0, 0.5, 0);
+                
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                wrapper.appendChild(renderer.domElement);
+                
+                // --- 2. Helpers (Grid & Dome) ---
+                const CENTER = new THREE.Vector3(0, 0.75, 0);
+                const RADIUS = 2.5;
+                
+                // Floor Grid
+                const grid = new THREE.GridHelper(6, 12, 0x444444, 0x111111);
+                scene.add(grid);
+                
+                // Hemisphere Guide (Wireframe Dome)
+                const domeGeo = new THREE.SphereGeometry(RADIUS, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5);
+                const domeMat = new THREE.MeshBasicMaterial({ color: 0x333333, wireframe: true, transparent: true, opacity: 0.15 });
+                const dome = new THREE.Mesh(domeGeo, domeMat);
+                dome.position.y = CENTER.y - 0.75; // Ground the dome
+                scene.add(dome);
+                
+                // Elevation Rings (Visual guides for 0, 45, 60 degrees)
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+                const eqRing = new THREE.Mesh(new THREE.TorusGeometry(RADIUS, 0.01, 8, 64), ringMat);
+                eqRing.rotation.x = Math.PI / 2;
+                eqRing.position.y = CENTER.y;
+                scene.add(eqRing);
+
+                // --- 3. The Subject (Image Plane) ---
+                let planeMesh;
+                const planeMat = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide });
+                
+                function createPlane(width=1.2, height=1.2) {
+                    if(planeMesh) scene.remove(planeMesh);
+                    planeMesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), planeMat);
+                    planeMesh.position.copy(CENTER);
+                    planeMesh.lookAt(camera.position); // Billboarding slightly? No, fixed upright.
+                    planeMesh.rotation.set(0,0,0); // Reset rotation
+                    scene.add(planeMesh);
+                }
+                createPlane();
+
+                // Texture Loader
+                function updateTexture(url) {
+                    if (!url) {
+                        planeMat.map = null; 
+                        planeMat.needsUpdate = true; 
+                        return;
+                    }
+                    new THREE.TextureLoader().load(url, (tex) => {
+                        planeMat.map = tex;
+                        planeMat.needsUpdate = true;
+                        // Adjust Aspect Ratio
+                        const img = tex.image;
+                        if(img && img.width && img.height) {
+                            const aspect = img.width / img.height;
+                            const size = 1.4; // Max dimension
+                            if (aspect > 1) createPlane(size, size/aspect);
+                            else createPlane(size*aspect, size);
+                        }
+                    });
+                }
+                if (props.imageUrl) updateTexture(props.imageUrl);
+
+                // --- 4. The Light Gizmo (Interactive) ---
+                const lightGroup = new THREE.Group();
+                scene.add(lightGroup);
+                
+                // The Orb
+                const orb = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2, 32, 32), 
+                    new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+                );
+                
+                // The Glow
+                const glow = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.35, 32, 32),
+                    new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.4 })
+                );
+                orb.add(glow);
+                lightGroup.add(orb);
+                
+                // The Beam (Cone)
+                const beamGeo = new THREE.ConeGeometry(0.4, RADIUS, 32, 1, true);
+                beamGeo.translate(0, -RADIUS/2, 0); // Pivot at base
+                beamGeo.rotateX(-Math.PI / 2); // Point along Z
+                const beamMat = new THREE.MeshBasicMaterial({ 
+                    color: 0xFFD700, 
+                    transparent: true, 
+                    opacity: 0.15, 
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending 
+                });
+                const beam = new THREE.Mesh(beamGeo, beamMat);
+                beam.lookAt(CENTER); // This will need dynamic updating
+                lightGroup.add(beam);
+
+                // --- 5. State & Logic ---
+                let az = props.value?.azimuth || 0;
+                let el = props.value?.elevation || 0;
+                
+                const AZ_MAP = {
+                    0: 'Front', 45: 'Right Front', 90: 'Right', 135: 'Right Rear',
+                    180: 'Rear', 225: 'Left Rear', 270: 'Left', 315: 'Left Front'
+                };
+                
+                function getPrompt(a, e) {
+                    if (e >= 60) return "Light source from Above";
+                    if (e <= -60) return "Light source from Below";
+                    // Snap
+                    const steps = [0,45,90,135,180,225,270,315];
+                    // Handle wrapped 360
+                    let normalized = a % 360;
+                    if(normalized < 0) normalized += 360;
+                    const snapped = steps.reduce((p, c) => Math.abs(c-normalized) < Math.abs(p-normalized) ? c : p);
+                    return `Light source from the ${AZ_MAP[snapped]}`;
+                }
+
+                function updateGizmo() {
+                    const r_az = THREE.MathUtils.degToRad(az);
+                    const r_el = THREE.MathUtils.degToRad(el);
+                    
+                    // Orbit Calculation
+                    const x = RADIUS * Math.sin(r_az) * Math.cos(r_el);
+                    const y = RADIUS * Math.sin(r_el) + CENTER.y;
+                    const z = RADIUS * Math.cos(r_az) * Math.cos(r_el);
+                    
+                    lightGroup.position.set(x, y, z);
+                    lightGroup.lookAt(CENTER); // Points the Beam at center
+                    
+                    // UI Updates
+                    const text = getPrompt(az, el);
+                    badge.innerText = text;
+                    
+                    // Color Logic (Warning for Above/Below)
+                    let mainColor = 0xFFD700; // Gold
+                    if (el >= 60 || el <= -60) mainColor = 0xFF4500; // OrangeRed
+                    
+                    orb.material.color.setHex(mainColor);
+                    glow.material.color.setHex(mainColor);
+                    beam.material.color.setHex(mainColor);
+                    badge.style.borderColor = '#' + new THREE.Color(mainColor).getHexString();
+                    badge.style.color = '#' + new THREE.Color(mainColor).getHexString();
+                }
+
+                // --- 6. Interaction (Drag) ---
+                const raycaster = new THREE.Raycaster();
+                const mouse = new THREE.Vector2();
+                let isDragging = false;
+                
+                // Invisible Drag Sphere (Larger hit area)
+                const dragSphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(RADIUS, 32, 16),
+                    new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+                );
+                dragSphere.position.copy(CENTER);
+                scene.add(dragSphere);
+
+                function getMouse(e) {
+                    const rect = wrapper.getBoundingClientRect();
+                    const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                    const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                    return {
+                        x: ((clientX - rect.left) / rect.width) * 2 - 1,
+                        y: -((clientY - rect.top) / rect.height) * 2 + 1
+                    };
+                }
+
+                function onDown(e) {
+                    const m = getMouse(e);
+                    raycaster.setFromCamera(m, camera);
+                    // Check if clicked near the light orb
+                    const intersects = raycaster.intersectObject(dragSphere);
+                    if(intersects.length > 0) {
+                        // Check distance to current light pos to prevent jumping if clicked far away
+                        if (intersects[0].point.distanceTo(lightGroup.position) < 1.0) {
+                            isDragging = true;
+                            wrapper.style.cursor = 'none'; // Hide cursor while dragging for immersion
+                        }
+                    }
+                }
+
+                function onMove(e) {
+                    if (!isDragging) {
+                        // Hover state
+                        const m = getMouse(e);
+                        raycaster.setFromCamera(m, camera);
+                        const hits = raycaster.intersectObject(dragSphere);
+                        if (hits.length > 0 && hits[0].point.distanceTo(lightGroup.position) < 0.8) {
+                            wrapper.style.cursor = 'pointer';
+                        } else {
+                            wrapper.style.cursor = 'default';
+                        }
+                        return;
+                    }
+
+                    const m = getMouse(e);
+                    raycaster.setFromCamera(m, camera);
+                    const intersects = raycaster.intersectObject(dragSphere);
+                    
+                    if (intersects.length > 0) {
+                        const p = intersects[0].point;
+                        const rel = new THREE.Vector3().subVectors(p, CENTER);
+                        
+                        // Convert Cartesian to Spherical (Azimuth/Elevation)
+                        let newAz = Math.atan2(rel.x, rel.z) * (180 / Math.PI);
+                        if (newAz < 0) newAz += 360;
+                        
+                        const distXZ = Math.sqrt(rel.x*rel.x + rel.z*rel.z);
+                        let newEl = Math.atan2(rel.y, distXZ) * (180 / Math.PI);
+                        
+                        // Limits
+                        newEl = Math.max(-89, Math.min(89, newEl));
+                        
+                        az = newAz;
+                        el = newEl;
+                        updateGizmo();
+                    }
+                }
+
+                function onUp() {
+                    if(isDragging) {
+                        isDragging = false;
+                        wrapper.style.cursor = 'default';
+                        // Propagate value back to Gradio
+                        props.value = { azimuth: az, elevation: el };
+                        trigger('change', props.value);
+                    }
+                }
+
+                // Event Listeners
+                wrapper.addEventListener('mousedown', onDown);
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+                wrapper.addEventListener('touchstart', onDown, {passive: false});
+                window.addEventListener('touchmove', onMove, {passive: false});
+                window.addEventListener('touchend', onUp);
+
+                // --- 7. Loop & Watchers ---
+                updateGizmo(); // Init
+                
+                function animate() {
+                    requestAnimationFrame(animate);
+                    // Subtle idle animation for the glow
+                    glow.scale.setScalar(1 + Math.sin(Date.now() * 0.003) * 0.1);
+                    renderer.render(scene, camera);
+                }
+                animate();
+
+                // Watch for changes from Python/Sliders
+                setInterval(() => {
+                    // Texture change
+                    if (props.imageUrl && (!planeMat.map || props.imageUrl !== planeMat.map.image.src)) {
+                         // handled by dedicated updater usually, but fail-safe
+                    }
+                    // Value change
+                    if (props.value && !isDragging) {
+                        if (Math.abs(props.value.azimuth - az) > 0.1 || Math.abs(props.value.elevation - el) > 0.1) {
+                            az = props.value.azimuth;
+                            el = props.value.elevation;
+                            updateGizmo();
+                        }
+                    }
+                }, 100);
+                
+                // Expose updater
+                wrapper._updateTexture = updateTexture;
+            };
+            initScene();
+        })();
+        """
+        
+        super().__init__(
+            value=value,
+            html_template=html_template,
+            js_on_load=js_on_load,
+            imageUrl=imageUrl,
+            **kwargs
+        )
+
+# --- UI Layout ---
+
+css = """
+#col-container { max-width: 1200px; margin: 0 auto; }
+#3d-container { border: 1px solid #333; border-radius: 12px; overflow: hidden; }
+.range-slider { accent-color: #FFD700 !important; }
 """
 
-with gr.Blocks() as demo:
-    with gr.Column(elem_id="col-container"):
-        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Open on [GitHub](https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load).")
-
-        with gr.Row(equal_height=True):
-            with gr.Column():
-                images = gr.Gallery(
-                    label="Upload Images", 
-                    type="filepath", 
-                    columns=2, 
-                    rows=1, 
-                    height=300,
-                    allow_preview=True
-                )
-                
-                prompt = gr.Text(
-                    label="Edit Prompt",
-                    #max_lines=1,
-                    show_label=True,
-                    placeholder="e.g., transform into anime..",
-                )
-
-                run_button = gr.Button("Edit Image", variant="primary")
-
-            with gr.Column():
-                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=365)
+with gr.Blocks(css=css, theme=gr.themes.Soft(primary_hue="yellow")) as demo:
+    gr.Markdown("""
+    # 💡 Qwen Edit 2509 — 3D Lighting Studio
+    
+    **Interactive Relighting:** Drag the ☀️ Sun in the 3D Viewport to change the lighting direction.
+    """)
+    
+    with gr.Row():
+        # --- Left Column: Controls ---
+        with gr.Column(scale=5):
+            # Input
+            image_input = gr.Image(label="Input Image", type="pil", height=320)
+            
+            gr.Markdown("### 🎮 3D Controller")
+            light_controller = LightControl3D(
+                value={"azimuth": 0, "elevation": 0},
+                elem_id="3d-container"
+            )
+            
+            # Action
+            run_btn = gr.Button("✨ Generate Lighting", variant="primary", size="lg")
+            
+            # Fine Tuning
+            with gr.Accordion("🎚️ Fine-Tune & Advanced", open=False):
+                with gr.Row():
+                    az_slider = gr.Slider(0, 359, value=0, label="Azimuth", step=1)
+                    el_slider = gr.Slider(-90, 90, value=0, label="Elevation", step=1)
                 
                 with gr.Row():
-                    lora_adapter = gr.Dropdown(
-                        label="Choose Editing Style",
-                        choices=list(ADAPTER_SPECS.keys()),
-                        value="Photo-to-Anime"
-                    )
+                    seed = gr.Slider(0, MAX_SEED, value=42, label="Seed", step=1)
+                    randomize_seed = gr.Checkbox(True, label="Randomize")
                 
-                with gr.Accordion("Advanced Settings", open=False, visible=False):
-                    seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
-                    randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
-                    guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
-                    steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
-        
-        gr.Examples(
-            examples=[
-                [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
-                [["examples/HRP.jpg"], "Transform into a hyper-realistic face portrait.", "Hyper-Realistic-Portrait"],
-                [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
-                [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
-                [["examples/L1.jpg", "examples/L2.jpg"], "Apply the lighting from image 2 to image 1.", "Any-light"],
-                [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
-                [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
-                [["examples/SL.jpg"], "Neutral uniform lighting Preserve identity and composition.", "Studio-DeLight"],
-                [["examples/PI.jpg"], "Transform it into Pixar-inspired 3D.", "Pixar-Inspired-3D"],
-                [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
-                [["examples/NCB.jpg"], "Transform into a noir comic book style.", "Noir-Comic-Book"],
-                [["examples/URP.jpg"], "ultra-realistic portrait.", "Ultra-Realistic-Portrait"],
-                [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
-                [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
-                [["examples/R1.jpg"], "Change the picture to realistic photograph.", "Anything2Real"],
-                [["examples/UA.jpeg"], "Unblur and upscale.", "Unblur-Anything"],
-                [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
-                [["examples/P1.jpg"], "Transform into anime (while preserving the background and remaining elements maintaining realism and original details.)", "Anime-V2"],
-            ],
-            inputs=[images, prompt, lora_adapter],
-            outputs=[output_image, seed],
-            fn=infer_example,
-            cache_examples=False,
-            label="Examples"
-        )
-        
-        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast)This is still an experimental Space for Qwen-Image-Edit-2511.")
+                with gr.Row():
+                    cfg = gr.Slider(1.0, 10.0, value=5.0, label="Guidance (CFG)")
+                    steps = gr.Slider(1, 20, value=4, step=1, label="Steps")
+                    
+                prompt_display = gr.Textbox(label="Actual Prompt sent to Model", interactive=False)
 
-    run_button.click(
-        fn=infer,
-        inputs=[images, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[output_image, seed]
+        # --- Right Column: Output ---
+        with gr.Column(scale=4):
+            result_output = gr.Image(label="Result", height=600)
+
+    # --- wiring ---
+    
+    # 1. Sync 3D -> Sliders & Text
+    def on_3d_change(val):
+        az = val.get('azimuth', 0)
+        el = val.get('elevation', 0)
+        prompt = build_lighting_prompt(az, el)
+        return az, el, prompt
+
+    light_controller.change(
+        on_3d_change,
+        inputs=[light_controller],
+        outputs=[az_slider, el_slider, prompt_display]
+    )
+    
+    # 2. Sync Sliders -> 3D & Text
+    def on_slider_change(az, el):
+        prompt = build_lighting_prompt(az, el)
+        return {"azimuth": az, "elevation": el}, prompt
+        
+    az_slider.change(on_slider_change, inputs=[az_slider, el_slider], outputs=[light_controller, prompt_display])
+    el_slider.change(on_slider_change, inputs=[az_slider, el_slider], outputs=[light_controller, prompt_display])
+
+    # 3. Handle Image Upload (Resize + Update 3D Texture)
+    def on_upload(img):
+        w, h = update_dimensions_on_upload(img)
+        if img is None: 
+            return w, h, gr.update(imageUrl=None)
+        
+        # Convert to Base64 for Three.js
+        import base64
+        from io import BytesIO
+        buffered = BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        data_url = f"data:image/png;base64,{img_str}"
+        return w, h, gr.update(imageUrl=data_url)
+
+    image_input.upload(
+        on_upload,
+        inputs=[image_input],
+        outputs=[gr.State(), gr.State(), light_controller] # We store W/H in state mostly, or just pass to infer
+    ).then(
+        # Pass W/H to hidden sliders or just recalc in infer for simplicity
+        None, None, None
+    )
+
+    # 4. Generate
+    def run_inference_wrapper(img, az, el, seed, rand, cfg, steps):
+        w, h = update_dimensions_on_upload(img) # Recalc dims here for safety
+        res, used_seed, p = infer_lighting_edit(img, az, el, seed, rand, cfg, steps, h, w)
+        return res
+
+    run_btn.click(
+        run_inference_wrapper,
+        inputs=[image_input, az_slider, el_slider, seed, randomize_seed, cfg, steps],
+        outputs=[result_output]
     )
 
 if __name__ == "__main__":
-    demo.queue(max_size=30).launch(css=css, theme=orange_red_theme, mcp_server=True, ssr_mode=False, show_error=True)
+    # CDN Load Three.js
+    head_js = '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'
+    demo.launch(head=head_js)
