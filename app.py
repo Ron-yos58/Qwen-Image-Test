@@ -195,6 +195,11 @@ ADAPTER_SPECS = {
        "weights": "QIE-2511-AnyLight_.safetensors",
        "adapter_name": "any-light"
    }, 
+    "Studio-DeLight": {
+       "repo": "prithivMLmods/QIE-2511-Studio-DeLight",
+       "weights": "QIE-2511-Studio-DeLight-5000.safetensors",
+       "adapter_name": "studio-delight"
+   }, 
 }
 
 LOADED_ADAPTERS = set()
