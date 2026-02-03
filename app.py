@@ -360,6 +360,7 @@ with gr.Blocks() as demo:
                 
                 prompt = gr.Text(
                     label="Edit Prompt",
+                    max_lines=1,
                     show_label=True,
                     placeholder="e.g., transform into anime..",
                 )
@@ -367,7 +368,7 @@ with gr.Blocks() as demo:
                 run_button = gr.Button("Edit Image", variant="primary")
 
             with gr.Column():
-                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=363)
+                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=365)
                 
                 with gr.Row():
                     lora_adapter = gr.Dropdown(
@@ -391,6 +392,7 @@ with gr.Blocks() as demo:
                 [["examples/L1.jpg", "examples/L2.jpg"], "Apply the lighting from image 2 to image 1.", "Any-light"],
                 [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
+                [["examples/SL.jpg"], "Neutral uniform lighting Preserve identity and composition.", "Studio-DeLight"],
                 [["examples/PI.jpg"], "Transform it into Pixar-inspired 3D.", "Pixar-Inspired-3D"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
                 [["examples/NCB.jpg"], "Transform into a noir comic book style.", "Noir-Comic-Book"],
