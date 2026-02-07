@@ -725,7 +725,7 @@ with gr.Blocks() as demo:
                 [["examples/L1.jpg", "examples/L2.jpg"], "Apply the lighting from image 2 to image 1.", "Any-light"],
                 [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
-                [["examples/CFL.jpg"], "Transform into a cinematic flat log.", "Cinematic-FlatLog"],
+                [["examples/URP.jpg"], "Transform into a cinematic flat log.", "Cinematic-FlatLog"],
                 [["examples/SL.jpg"], "Neutral uniform lighting Preserve identity and composition.", "Studio-DeLight"],
                 [["examples/PI.jpg"], "Transform it into Pixar-inspired 3D.", "Pixar-Inspired-3D"],
                 [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
