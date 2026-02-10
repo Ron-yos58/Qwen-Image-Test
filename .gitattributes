@@ -45,3 +45,4 @@ examples/HRP.jpg filter=lfs diff=lfs merge=lfs -text
 examples/URP.jpg filter=lfs diff=lfs merge=lfs -text
 examples/SL.jpg filter=lfs diff=lfs merge=lfs -text
 examples/CFL.jpg filter=lfs diff=lfs merge=lfs -text
+examples/HS1.jpg filter=lfs diff=lfs merge=lfs -text
