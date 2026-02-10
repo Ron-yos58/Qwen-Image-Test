@@ -719,7 +719,7 @@ with gr.Blocks() as demo:
                     seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
                     randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
                     guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
-                    steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=8)
+                    steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
         
         gr.Examples(
             examples=[
