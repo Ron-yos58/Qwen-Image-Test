@@ -12,8 +12,8 @@ from gradio.themes.utils import colors, fonts, sizes
 
 colors.orange_red = colors.Color(
     name="orange_red",
-    c50="#FFF5F0",
-    c100="#FFE8E0",
+    c50="#FFF0E5",
+    c100="#FFE0CC",
     c200="#FFC299",
     c300="#FFA366",
     c400="#FF8533",
@@ -205,11 +205,6 @@ ADAPTER_SPECS = {
        "weights": "QIE-2511-Cinematic-FlatLog-Control-3200.safetensors",
        "adapter_name": "flat-log"
    },   
-    "Guided-Head-Face-Swap": {
-       "repo": "prithivMLmods/QIE-2511-Guided-Head-Face-Swap",
-       "weights": "QIE-2511-Guided-Head-Face-Swap-3000.safetensors",
-       "adapter_name": "head-face-swap"
-   },  
 }
 
 LOADED_ADAPTERS = set()
@@ -344,347 +339,18 @@ def infer_example(images, prompt, lora_adapter):
     )
     return result, seed
 
-css = """
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-
-/* Background grid pattern - Orange Red theme */
-body, .gradio-container {
-    background-color: #FFF5F0 !important;
-    background-image: 
-        linear-gradient(#FFC299 1px, transparent 1px), 
-        linear-gradient(90deg, #FFC299 1px, transparent 1px) !important;
-    background-size: 40px 40px !important;
-    font-family: 'Outfit', sans-serif !important;
-}
-
-/* Dark mode grid */
-.dark body, .dark .gradio-container {
-    background-color: #1a1a1a !important;
-    background-image: 
-        linear-gradient(rgba(255, 69, 0, 0.1) 1px, transparent 1px), 
-        linear-gradient(90deg, rgba(255, 69, 0, 0.1) 1px, transparent 1px) !important;
-    background-size: 40px 40px !important;
-}
-
+css="""
 #col-container {
     margin: 0 auto;
     max-width: 1000px;
 }
-
-/* Main title styling */
-#main-title {
-    text-align: center !important;
-    padding: 1rem 0 0.5rem 0;
-}
-
-#main-title h1 {
-    font-size: 2.3em !important;
-    font-weight: 700 !important;
-    background: linear-gradient(135deg, #FF4500 0%, #FF8533 50%, #E63E00 100%);
-    background-size: 200% 200%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: gradient-shift 4s ease infinite;
-    letter-spacing: -0.02em;
-}
-
-@keyframes gradient-shift {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-}
-
-/* Subtitle styling */
-#subtitle {
-    text-align: center !important;
-    margin-bottom: 1.5rem;
-}
-
-#subtitle p {
-    margin: 0 auto;
-    color: #666666;
-    font-size: 1rem;
-    text-align: center !important;
-}
-
-#subtitle a {
-    color: #FF4500 !important;
-    text-decoration: none;
-    font-weight: 500;
-}
-
-#subtitle a:hover {
-    text-decoration: underline;
-}
-
-/* Card styling */
-.gradio-group {
-    background: rgba(255, 255, 255, 0.9) !important;
-    border: 2px solid #FFC299 !important;
-    border-radius: 12px !important;
-    box-shadow: 0 4px 24px rgba(255, 69, 0, 0.08) !important;
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
-}
-
-.gradio-group:hover {
-    box-shadow: 0 8px 32px rgba(255, 69, 0, 0.12) !important;
-    border-color: #FF8533 !important;
-}
-
-.dark .gradio-group {
-    background: rgba(30, 30, 30, 0.9) !important;
-    border-color: rgba(255, 69, 0, 0.3) !important;
-}
-
-/* Image upload area */
-.gradio-image {
-    border-radius: 10px !important;
-    overflow: hidden;
-    border: 2px dashed #FF8533 !important;
-    transition: all 0.3s ease;
-}
-
-.gradio-image:hover {
-    border-color: #FF4500 !important;
-    background: rgba(255, 69, 0, 0.02) !important;
-}
-
-/* Gallery styling */
-.gradio-gallery {
-    border-radius: 10px !important;
-}
-
-.gradio-gallery .gallery-item {
-    border: 2px solid #FFC299 !important;
-    border-radius: 8px !important;
-    transition: all 0.2s ease !important;
-}
-
-.gradio-gallery .gallery-item:hover {
-    border-color: #FF4500 !important;
-    box-shadow: 0 4px 12px rgba(255, 69, 0, 0.15) !important;
-}
-
-/* Radio buttons */
-.gradio-radio {
-    border-radius: 8px !important;
-}
-
-.gradio-radio label {
-    border-radius: 6px !important;
-    transition: all 0.2s ease !important;
-    border: 1px solid transparent !important;
-}
-
-.gradio-radio label:hover {
-    background: rgba(255, 69, 0, 0.05) !important;
-}
-
-.gradio-radio label.selected {
-    background: rgba(255, 69, 0, 0.1) !important;
-    border-color: #FF4500 !important;
-}
-
-/* Primary button */
-.primary {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.02em !important;
-    transition: all 0.3s ease !important;
-}
-
-.primary:hover {
-    transform: translateY(-2px) !important;
-}
-
-/* Tabs styling */
-.tab-nav {
-    border-bottom: 2px solid #FFC299 !important;
-}
-
-.tab-nav button {
-    font-weight: 500 !important;
-    padding: 10px 18px !important;
-    border-radius: 8px 8px 0 0 !important;
-    transition: all 0.2s ease !important;
-}
-
-.tab-nav button.selected {
-    background: rgba(255, 69, 0, 0.1) !important;
-    border-bottom: 2px solid #FF4500 !important;
-}
-
-/* Output textbox */
-.gradio-textbox textarea {
-    font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 0.95rem !important;
-    line-height: 1.7 !important;
-    background: rgba(255, 255, 255, 0.95) !important;
-    border: 1px solid #FFC299 !important;
-    border-radius: 8px !important;
-}
-
-.dark .gradio-textbox textarea {
-    background: rgba(30, 30, 30, 0.95) !important;
-    border-color: rgba(255, 69, 0, 0.2) !important;
-}
-
-/* Markdown output */
-.gradio-markdown {
-    font-family: 'Outfit', sans-serif !important;
-    line-height: 1.7 !important;
-}
-
-.gradio-markdown code {
-    font-family: 'IBM Plex Mono', monospace !important;
-    background: rgba(255, 69, 0, 0.08) !important;
-    padding: 2px 6px !important;
-    border-radius: 4px !important;
-    color: #CC3700 !important;
-}
-
-.gradio-markdown pre {
-    background: rgba(255, 69, 0, 0.05) !important;
-    border: 1px solid #FFC299 !important;
-    border-radius: 8px !important;
-    padding: 1rem !important;
-}
-
-/* Examples section */
-.gradio-examples {
-    border-radius: 10px !important;
-}
-
-.gradio-examples .gallery-item {
-    border: 2px solid #FFC299 !important;
-    border-radius: 8px !important;
-    transition: all 0.2s ease !important;
-}
-
-.gradio-examples .gallery-item:hover {
-    border-color: #FF4500 !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 12px rgba(255, 69, 0, 0.15) !important;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: rgba(255, 69, 0, 0.05);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #FF4500, #FF8533);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #E63E00, #FF4500);
-}
-
-/* Accordion styling */
-.gradio-accordion {
-    border-radius: 10px !important;
-    border: 1px solid #FFC299 !important;
-}
-
-.gradio-accordion > .label-wrap {
-    background: rgba(255, 69, 0, 0.03) !important;
-    border-radius: 10px !important;
-}
-
-/* Hide footer */
-footer {
-    display: none !important;
-}
-
-/* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.gradio-row {
-    animation: fadeIn 0.4s ease-out;
-}
-
-/* Label styling */
-label {
-    font-weight: 600 !important;
-    color: #333 !important;
-}
-
-.dark label {
-    color: #eee !important;
-}
-
-/* Dropdown styling */
-.gradio-dropdown {
-    border-radius: 8px !important;
-}
-
-.gradio-dropdown select, .gradio-dropdown input {
-    border: 1px solid #FFC299 !important;
-    border-radius: 8px !important;
-    transition: all 0.2s ease !important;
-}
-
-.gradio-dropdown select:focus, .gradio-dropdown input:focus {
-    border-color: #FF4500 !important;
-    box-shadow: 0 0 0 2px rgba(255, 69, 0, 0.1) !important;
-}
-
-/* Slider styling */
-.gradio-slider input[type="range"] {
-    accent-color: #FF4500 !important;
-}
-
-.gradio-slider .range-slider {
-    background: #FFC299 !important;
-}
-
-.gradio-slider .range-slider .handle {
-    background: #FF4500 !important;
-    border-color: #FF4500 !important;
-}
-
-/* Progress bar */
-.dark .progress-text {
-    color: white !important;
-}
-
-.progress-bar {
-    background: linear-gradient(90deg, #FF4500, #FF8533) !important;
-}
-
-/* Checkbox styling */
-.gradio-checkbox input[type="checkbox"]:checked {
-    background-color: #FF4500 !important;
-    border-color: #FF4500 !important;
-}
-
-/* Number input styling */
-.gradio-number input {
-    border: 1px solid #FFC299 !important;
-    border-radius: 8px !important;
-}
-
-.gradio-number input:focus {
-    border-color: #FF4500 !important;
-    box-shadow: 0 0 0 2px rgba(255, 69, 0, 0.1) !important;
-}
+#main-title h1 {font-size: 2.4em !important;}
 """
 
 with gr.Blocks() as demo:
     with gr.Column(elem_id="col-container"):
         gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Open on [GitHub](https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load).", elem_id="subtitle")
+        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Open on [GitHub](https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load).")
 
         with gr.Row(equal_height=True):
             with gr.Column():
@@ -699,6 +365,7 @@ with gr.Blocks() as demo:
                 
                 prompt = gr.Text(
                     label="Edit Prompt",
+                    #max_lines=1,
                     show_label=True,
                     placeholder="e.g., transform into anime..",
                 )
@@ -728,7 +395,6 @@ with gr.Blocks() as demo:
                 [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
                 [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
                 [["examples/L1.jpg", "examples/L2.jpg"], "Apply the lighting from image 2 to image 1.", "Any-light"],
-                [["examples/HS1.jpg", "examples/HS2.jpg"], "Swap the head from Image 2 onto Image 1 while preserving Image 1 lighting and pose and Image 2 identity.", "Guided-Head-Face-Swap"],
                 [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
                 [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
                 [["examples/URP.jpg"], "Transform into a cinematic flat log.", "Cinematic-FlatLog"],
