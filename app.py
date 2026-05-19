@@ -150,7 +150,6 @@ ADAPTER_SPECS = {
 }
 
 LOADED_ADAPTERS: set = set()
-
 ADAPTER_NAMES = list(ADAPTER_SPECS.keys())
 
 EXAMPLES_CONFIG = [
@@ -358,7 +357,7 @@ def infer(
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
 css = r"""
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── Reset & base ─────────────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
@@ -380,9 +379,15 @@ css = r"""
     --text3:    #555560;
     --mono:     'JetBrains Mono', monospace;
 }
+
+/* Force dark theme always - override any light mode */
+html, body, .gradio-container, .dark, :root {
+    color-scheme: dark !important;
+}
+
 body,.gradio-container{
     background:var(--bg)!important;
-    font-family:'Syne',system-ui,sans-serif!important;
+    font-family:'Inter',system-ui,-apple-system,sans-serif!important;
     font-size:14px!important;color:var(--text)!important;min-height:100vh;
 }
 .dark body,.dark .gradio-container{background:var(--bg)!important;color:var(--text)!important}
@@ -398,7 +403,7 @@ footer{display:none!important}
 
 /* ── App shell ────────────────────────────────────────────────────────────── */
 .app-shell{
-    background:var(--bg1);border:1px solid var(--border);border-radius:18px;
+    background:var(--bg1)!important;border:1px solid var(--border);border-radius:18px;
     margin:12px auto;max-width:1440px;overflow:hidden;
     box-shadow:0 32px 64px -16px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.03),
                0 0 60px -20px var(--or-glow);
@@ -406,7 +411,7 @@ footer{display:none!important}
 
 /* ── Header ───────────────────────────────────────────────────────────────── */
 .app-header{
-    background:linear-gradient(135deg,var(--bg1),var(--bg2));
+    background:linear-gradient(135deg,var(--bg1),var(--bg2))!important;
     border-bottom:1px solid var(--border);
     padding:14px 24px;display:flex;align-items:center;justify-content:space-between;
     flex-wrap:wrap;gap:12px;
@@ -432,7 +437,7 @@ footer{display:none!important}
 
 /* ── Toolbar ──────────────────────────────────────────────────────────────── */
 .app-toolbar{
-    background:var(--bg1);border-bottom:1px solid var(--border);
+    background:var(--bg1)!important;border-bottom:1px solid var(--border);
     padding:7px 16px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;
 }
 .tb-sep{width:1px;height:28px;background:var(--border);margin:0 8px}
@@ -440,7 +445,7 @@ footer{display:none!important}
     display:inline-flex;align-items:center;justify-content:center;gap:6px;
     min-width:32px;height:34px;background:transparent;border:1px solid transparent;
     border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;padding:0 12px;
-    font-family:'Syne',sans-serif;color:#fff!important;-webkit-text-fill-color:#fff!important;
+    font-family:'Inter',sans-serif;color:#fff!important;-webkit-text-fill-color:#fff!important;
     transition:all .15s ease;
 }
 .modern-tb-btn:hover{background:var(--or-soft);border-color:rgba(255,69,0,.35)}
@@ -453,11 +458,11 @@ footer{display:none!important}
 /* ── Main layout ──────────────────────────────────────────────────────────── */
 .app-main-row{display:flex;gap:0;flex:1;overflow:hidden}
 .app-main-left{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border)}
-.app-main-right{width:440px;display:flex;flex-direction:column;flex-shrink:0;background:var(--bg1)}
+.app-main-right{width:440px;display:flex;flex-direction:column;flex-shrink:0;background:var(--bg1)!important}
 
 /* ── Drop zone ────────────────────────────────────────────────────────────── */
-#gallery-drop-zone{position:relative;background:#09090b;min-height:440px;overflow:auto}
-#gallery-drop-zone.drag-over{outline:2px solid var(--or);outline-offset:-2px;background:var(--or-xsoft)}
+#gallery-drop-zone{position:relative;background:#09090b!important;min-height:440px;overflow:auto}
+#gallery-drop-zone.drag-over{outline:2px solid var(--or);outline-offset:-2px;background:var(--or-xsoft)!important}
 
 .upload-prompt-modern{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20}
 .upload-click-area{
@@ -505,7 +510,7 @@ footer{display:none!important}
 
 /* ── Hint bar ─────────────────────────────────────────────────────────────── */
 .hint-bar{
-    background:rgba(255,69,0,.05);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    background:rgba(255,69,0,.05)!important;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
     padding:10px 20px;font-size:13px;color:var(--text2);line-height:1.7;font-weight:400;
 }
 .hint-bar b{color:#FF7A4D;font-weight:700}
@@ -515,7 +520,7 @@ footer{display:none!important}
 }
 
 /* ── Suggestions ──────────────────────────────────────────────────────────── */
-.suggestions-section{border-top:1px solid var(--border);padding:12px 16px}
+.suggestions-section{border-top:1px solid var(--border);padding:12px 16px;background:var(--bg1)!important}
 .suggestions-title,.examples-title{
     font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;
     letter-spacing:1px;margin-bottom:10px;
@@ -524,30 +529,30 @@ footer{display:none!important}
 .suggestion-chip{
     display:inline-flex;align-items:center;gap:4px;padding:5px 13px;
     background:var(--or-soft);border:1px solid rgba(255,69,0,.25);border-radius:20px;
-    color:#FF7A4D;font-size:12px;font-weight:600;font-family:'Syne',sans-serif;
+    color:#FF7A4D;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;
     cursor:pointer;transition:all .15s;white-space:nowrap;
 }
 .suggestion-chip:hover{background:rgba(255,69,0,.18);border-color:var(--or);color:#fff;transform:translateY(-1px)}
 
 /* ── Examples section ─────────────────────────────────────────────────────── */
-.examples-section{border-top:1px solid var(--border);padding:14px 16px 18px}
+.examples-section{border-top:1px solid var(--border);padding:14px 16px 18px;background:var(--bg1)!important}
 .examples-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;padding-top:2px}
 .examples-scroll::-webkit-scrollbar{height:5px}
 .examples-scroll::-webkit-scrollbar-track{background:var(--bg);border-radius:3px}
 .examples-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 .examples-scroll::-webkit-scrollbar-thumb:hover{background:var(--or-dim)}
 .example-card{
-    flex-shrink:0;width:220px;background:var(--bg2);border:1px solid var(--border);
+    flex-shrink:0;width:220px;background:var(--bg2)!important;border:1px solid var(--border);
     border-radius:12px;overflow:hidden;cursor:pointer;transition:all .2s ease;
 }
 .example-card:hover{border-color:var(--or);transform:translateY(-3px);box-shadow:0 6px 20px var(--or-glow)}
 .example-card:active{transform:translateY(-1px)}
 .example-card.loading{opacity:.5;pointer-events:none}
-.example-thumbs{display:flex;height:115px;overflow:hidden;background:var(--bg3)}
+.example-thumbs{display:flex;height:115px;overflow:hidden;background:var(--bg3)!important}
 .example-thumbs img{flex:1;object-fit:cover;min-width:0}
 .example-thumb-placeholder{
     flex:1;display:flex;align-items:center;justify-content:center;
-    background:var(--bg3);color:var(--text3);font-size:11px;min-width:0;
+    background:var(--bg3)!important;color:var(--text3);font-size:11px;min-width:0;
 }
 .example-meta{padding:7px 10px 3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .example-badge{
@@ -567,16 +572,17 @@ footer{display:none!important}
 }
 
 /* ── Right panel cards ────────────────────────────────────────────────────── */
-.panel-card{border-bottom:1px solid var(--border)}
+.panel-card{border-bottom:1px solid var(--border);background:var(--bg1)!important}
 .panel-card-title{
     padding:11px 20px;font-size:11px;font-weight:700;color:var(--text3);
     text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid rgba(42,42,46,.6);
+    background:var(--bg1)!important;
 }
-.panel-card-body{padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.panel-card-body{padding:14px 18px;display:flex;flex-direction:column;gap:8px;background:var(--bg1)!important}
 .modern-label{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:4px;display:block}
 .modern-textarea{
-    width:100%;background:#09090b;border:1px solid var(--border);border-radius:8px;
-    padding:10px 14px;font-family:'Syne',sans-serif;font-size:14px;color:var(--text);
+    width:100%;background:#09090b!important;border:1px solid var(--border);border-radius:8px;
+    padding:10px 14px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text)!important;
     resize:vertical;outline:none;min-height:44px;transition:border-color .2s;font-weight:400;
 }
 .modern-textarea:focus{border-color:var(--or);box-shadow:0 0 0 3px var(--or-glow)}
@@ -587,26 +593,70 @@ footer{display:none!important}
 }
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}
 
-/* ── LoRA selector ────────────────────────────────────────────────────────── */
-.lora-selector-card{border-bottom:1px solid var(--border)}
-.lora-selector-body{padding:12px 18px}
-.lora-select-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+/* ── LoRA selector - always dark ─────────────────────────────────────────── */
+.lora-selector-card{
+    border-bottom:1px solid var(--border);
+    background:#0d0d0f!important;
+}
+.lora-selector-body{
+    padding:12px 18px;
+    background:#0d0d0f!important;
+}
+.lora-select-label{
+    font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;
+    letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;gap:6px;
+    font-family:'Inter',sans-serif;
+}
 .lora-select-label::before{content:'';display:inline-block;width:8px;height:8px;background:var(--or);border-radius:50%}
 .lora-native-select{
-    width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;
-    padding:9px 14px;font-family:'Syne',sans-serif;font-size:13px;font-weight:600;
-    color:var(--text);outline:none;appearance:none;-webkit-appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23FF4500' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;background-position:right 12px center;
+    width:100%;
+    background:#09090b!important;
+    border:1px solid var(--border2);border-radius:8px;
+    padding:9px 14px;
+    font-family:'Inter',sans-serif;
+    font-size:13px;font-weight:600;
+    color:var(--text)!important;
+    -webkit-text-fill-color:var(--text)!important;
+    outline:none;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23FF4500' d='M6 8L1 3h10z'/%3E%3C/svg%3E")!important;
+    background-repeat:no-repeat!important;background-position:right 12px center!important;
     padding-right:36px;cursor:pointer;transition:border-color .2s;
+    color-scheme: dark;
 }
 .lora-native-select:focus{border-color:var(--or);box-shadow:0 0 0 3px var(--or-glow)}
-.lora-native-select option{background:#1a1a1d;color:var(--text)}
+.lora-native-select option{
+    background:#1a1a1d!important;
+    color:var(--text)!important;
+    -webkit-text-fill-color:var(--text)!important;
+}
+
+/* Force dark on LoRA section regardless of system theme */
+@media (prefers-color-scheme: light) {
+    .lora-selector-card,
+    .lora-selector-body {
+        background:#0d0d0f!important;
+        color:var(--text)!important;
+    }
+    .lora-select-label {
+        color:var(--text3)!important;
+        -webkit-text-fill-color:var(--text3)!important;
+    }
+    .lora-native-select {
+        background:#09090b!important;
+        color:var(--text)!important;
+        -webkit-text-fill-color:var(--text)!important;
+        border-color:var(--border2)!important;
+    }
+    .lora-native-select option {
+        background:#1a1a1d!important;
+        color:var(--text)!important;
+    }
+}
 
 /* ── Toast ────────────────────────────────────────────────────────────────── */
 .toast-notification{
     position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-120%);
-    z-index:9999;padding:10px 24px;border-radius:10px;font-family:'Syne',sans-serif;
+    z-index:9999;padding:10px 24px;border-radius:10px;font-family:'Inter',sans-serif;
     font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;
     box-shadow:0 8px 24px rgba(0,0,0,.5);
     transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .35s ease;opacity:0;pointer-events:none;
@@ -621,7 +671,7 @@ footer{display:none!important}
 .btn-run{
     display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
     background:linear-gradient(135deg,var(--or),var(--or-dim));border:none;border-radius:10px;
-    padding:13px 24px;cursor:pointer;font-size:15px;font-weight:800;font-family:'Syne',sans-serif;
+    padding:13px 24px;cursor:pointer;font-size:15px;font-weight:800;font-family:'Inter',sans-serif;
     color:#fff!important;-webkit-text-fill-color:#fff!important;transition:all .2s ease;letter-spacing:.2px;
     box-shadow:0 4px 20px var(--or-glow),inset 0 1px 0 rgba(255,255,255,.12);
 }
@@ -641,9 +691,10 @@ footer{display:none!important}
     padding:10px 20px;font-size:11px;font-weight:700;color:#fff!important;
     -webkit-text-fill-color:#fff!important;text-transform:uppercase;letter-spacing:1px;
     border-bottom:1px solid rgba(42,42,46,.6);display:flex;align-items:center;justify-content:space-between;
+    background:var(--bg1)!important;
 }
 .out-body{
-    flex:1;background:#09090b;display:flex;align-items:center;justify-content:center;
+    flex:1;background:#09090b!important;display:flex;align-items:center;justify-content:center;
     overflow:hidden;min-height:240px;position:relative;
 }
 .out-body img{max-width:100%;max-height:460px;image-rendering:auto}
@@ -668,7 +719,7 @@ footer{display:none!important}
     border-radius:50%;animation:spin .8s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-.modern-loader .loader-text{font-size:13px;color:var(--text2);font-weight:600}
+.modern-loader .loader-text{font-size:13px;color:var(--text2);font-weight:600;font-family:'Inter',sans-serif}
 .loader-bar-track{width:200px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
 .loader-bar-fill{
     height:100%;background:linear-gradient(90deg,var(--or),var(--or-bright),var(--or));
@@ -677,14 +728,15 @@ footer{display:none!important}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* ── Advanced settings ────────────────────────────────────────────────────── */
-.settings-group{border:1px solid var(--border);border-radius:10px;margin:12px 16px;padding:0;overflow:hidden}
+.settings-group{border:1px solid var(--border);border-radius:10px;margin:12px 16px;padding:0;overflow:hidden;background:var(--bg1)!important}
 .settings-group-title{
     font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;
-    padding:9px 16px;border-bottom:1px solid var(--border);background:rgba(26,26,29,.5);
+    padding:9px 16px;border-bottom:1px solid var(--border);background:rgba(26,26,29,.5)!important;
+    font-family:'Inter',sans-serif;
 }
-.settings-group-body{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.settings-group-body{padding:14px 16px;display:flex;flex-direction:column;gap:12px;background:var(--bg1)!important}
 .slider-row{display:flex;align-items:center;gap:10px;min-height:28px}
-.slider-row label{font-size:13px;font-weight:600;color:var(--text2);min-width:72px;flex-shrink:0}
+.slider-row label{font-size:13px;font-weight:600;color:var(--text2);min-width:72px;flex-shrink:0;font-family:'Inter',sans-serif}
 .slider-row input[type="range"]{
     flex:1;-webkit-appearance:none;appearance:none;height:5px;background:var(--border2);
     border-radius:3px;outline:none;min-width:0;
@@ -706,11 +758,11 @@ footer{display:none!important}
 }
 .checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)}
 .checkbox-row input[type="checkbox"]{accent-color:var(--or);width:16px;height:16px;cursor:pointer}
-.checkbox-row label{color:var(--text2);font-size:13px;cursor:pointer;font-weight:500}
+.checkbox-row label{color:var(--text2);font-size:13px;cursor:pointer;font-weight:500;font-family:'Inter',sans-serif}
 
 /* ── Status bar ───────────────────────────────────────────────────────────── */
 .app-statusbar{
-    background:var(--bg1);border-top:1px solid var(--border);padding:6px 20px;
+    background:var(--bg1)!important;border-top:1px solid var(--border);padding:6px 20px;
     display:flex;gap:12px;height:34px;align-items:center;font-size:12px;
 }
 .app-statusbar .sb-section{
@@ -722,7 +774,11 @@ footer{display:none!important}
     padding:3px 12px;background:var(--or-soft);border-radius:6px;
     color:var(--or-bright);font-weight:700;border:1px solid rgba(255,69,0,.2);
 }
-.exp-note{padding:10px 20px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);text-align:center;font-weight:500}
+.exp-note{
+    padding:10px 20px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);
+    text-align:center;font-weight:500;background:var(--bg1)!important;
+    font-family:'Inter',sans-serif;
+}
 .exp-note a{color:var(--or-bright);text-decoration:none}
 .exp-note a:hover{text-decoration:underline;color:#fff}
 
@@ -829,7 +885,6 @@ function init() {
         if (!loraSelect) return;
         const container = document.getElementById('gradio-lora');
         if (!container) return;
-        // Try Gradio dropdown internal select
         container.querySelectorAll('input').forEach(el => {
             const proto = HTMLInputElement.prototype;
             const ns = Object.getOwnPropertyDescriptor(proto, 'value');
@@ -943,13 +998,12 @@ function init() {
         }
     };
 
-    // Example card click handler
     document.querySelectorAll('.example-card[data-idx]').forEach(card => {
         card.addEventListener('click', () => {
             const idx = card.getAttribute('data-idx');
             document.querySelectorAll('.example-card.loading').forEach(c => c.classList.remove('loading'));
             card.classList.add('loading');
-            showToast('Loading example…', 'info');
+            showToast('Loading example\u2026', 'info');
             setGradioValue('example-result-data', '');
             setGradioValue('example-idx-input', idx);
             setTimeout(() => {
@@ -960,7 +1014,6 @@ function init() {
         });
     });
 
-    // Sync custom sliders to hidden Gradio components
     function syncSlider(customId, gradioId) {
         const slider = document.getElementById(customId);
         const valSpan = document.getElementById(customId + '-val');
@@ -997,7 +1050,7 @@ function init() {
         const l = document.getElementById('output-loader');
         if (l) l.classList.add('active');
         const sb = document.querySelector('.sb-fixed');
-        if (sb) sb.textContent = 'Processing…';
+        if (sb) sb.textContent = 'Processing\u2026';
     }
     function hideLoader() {
         const l = document.getElementById('output-loader');
@@ -1117,7 +1170,7 @@ function watchExampleResults() {
                     }
                 });
                 document.querySelectorAll('.example-card.loading').forEach(c => c.classList.remove('loading'));
-                if (window.__showToast) window.__showToast('Example loaded — ' + data.images.length + ' image(s)', 'info');
+                if (window.__showToast) window.__showToast('Example loaded \u2014 ' + data.images.length + ' image(s)', 'info');
             } else if (data.status === 'error') {
                 document.querySelectorAll('.example-card.loading').forEach(c => c.classList.remove('loading'));
                 if (window.__showToast) window.__showToast('Could not load example images', 'error');
@@ -1152,7 +1205,7 @@ LORA_OPTIONS_HTML = "\n".join(
 )
 
 # ── Gradio app ─────────────────────────────────────────────────────────────────
-with gr.Blocks(css=css) as demo:
+with gr.Blocks() as demo:
 
     # Hidden Gradio state components
     hidden_images_b64 = gr.Textbox(value="[]",  elem_id="hidden-images-b64",   elem_classes="hidden-input", container=False)
@@ -1181,7 +1234,7 @@ with gr.Blocks(css=css) as demo:
         </div>
         <a href="https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load"
            target="_blank"
-           style="font-size:12px;color:var(--text3);text-decoration:none;font-weight:600;display:flex;align-items:center;gap:5px;">
+           style="font-size:12px;color:var(--text3);text-decoration:none;font-weight:600;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:5px;">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           GitHub
         </a>
@@ -1230,9 +1283,9 @@ with gr.Blocks(css=css) as demo:
 
           <!-- Hint bar -->
           <div class="hint-bar">
-            <b>Upload:</b> Click or drag images &nbsp;·&nbsp;
-            <b>Multi-image:</b> Upload multiple for reference editing &nbsp;·&nbsp;
-            <kbd>Remove</kbd> deletes selected &nbsp;·&nbsp;
+            <b>Upload:</b> Click or drag images &nbsp;&middot;&nbsp;
+            <b>Multi-image:</b> Upload multiple for reference editing &nbsp;&middot;&nbsp;
+            <kbd>Remove</kbd> deletes selected &nbsp;&middot;&nbsp;
             <kbd>Clear All</kbd> removes everything
           </div>
 
@@ -1261,7 +1314,7 @@ with gr.Blocks(css=css) as demo:
 
           <!-- Examples section -->
           <div class="examples-section">
-            <div class="examples-title">Quick Examples — click to load</div>
+            <div class="examples-title">Quick Examples &mdash; click to load</div>
             <div class="examples-scroll">
               {EXAMPLE_CARDS_HTML}
             </div>
@@ -1278,11 +1331,11 @@ with gr.Blocks(css=css) as demo:
             <div class="panel-card-body">
               <label class="modern-label" for="custom-prompt-input">Prompt</label>
               <textarea id="custom-prompt-input" class="modern-textarea" rows="3"
-                        placeholder="e.g., transform into anime, upscale, change lighting…"></textarea>
+                        placeholder="e.g., transform into anime, upscale, change lighting&hellip;"></textarea>
             </div>
           </div>
 
-          <!-- LoRA selector (below prompt) -->
+          <!-- LoRA selector - forced dark -->
           <div class="lora-selector-card">
             <div class="lora-selector-body">
               <div class="lora-select-label">Editing Style / LoRA</div>
@@ -1314,7 +1367,7 @@ with gr.Blocks(css=css) as demo:
             <div class="out-body" id="output-image-container">
               <div class="modern-loader" id="output-loader">
                 <div class="loader-spinner"></div>
-                <div class="loader-text">Processing image…</div>
+                <div class="loader-text">Processing image&hellip;</div>
                 <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
               </div>
               <div class="out-placeholder" id="output-placeholder">Result will appear here</div>
@@ -1350,12 +1403,10 @@ with gr.Blocks(css=css) as demo:
         </div><!-- /right -->
       </div><!-- /main-row -->
 
-      <!-- Footer note -->
+      <!-- Footer note - GitHub link removed, already in header -->
       <div class="exp-note">
         Experimental Space for
         <a href="https://huggingface.co/Qwen/Qwen-Image-Edit-2511" target="_blank">Qwen-Image-Edit-2511</a>
-        &middot;
-        <a href="https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load" target="_blank">GitHub</a>
         &middot; LoRAs loaded lazily on first use
       </div>
 
@@ -1368,7 +1419,6 @@ with gr.Blocks(css=css) as demo:
     </div><!-- /app-shell -->
     """)
 
-    # Off-screen Gradio run button wired by JS
     run_btn = gr.Button("Run", elem_id="gradio-run-btn")
 
     demo.load(fn=None, js=gallery_js)
