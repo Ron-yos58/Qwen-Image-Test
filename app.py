@@ -5,78 +5,14 @@ import numpy as np
 import spaces
 import torch
 import random
+import base64
+import json
+import html as html_lib
+from io import BytesIO
 from PIL import Image
-from typing import Iterable
-from gradio.themes import Soft
-from gradio.themes.utils import colors, fonts, sizes
 
-colors.orange_red = colors.Color(
-    name="orange_red",
-    c50="#FFF0E5",
-    c100="#FFE0CC",
-    c200="#FFC299",
-    c300="#FFA366",
-    c400="#FF8533",
-    c500="#FF4500",
-    c600="#E63E00",
-    c700="#CC3700",
-    c800="#B33000",
-    c900="#992900",
-    c950="#802200",
-)
-
-class OrangeRedTheme(Soft):
-    def __init__(
-        self,
-        *,
-        primary_hue: colors.Color | str = colors.gray,
-        secondary_hue: colors.Color | str = colors.orange_red,
-        neutral_hue: colors.Color | str = colors.slate,
-        text_size: sizes.Size | str = sizes.text_lg,
-        font: fonts.Font | str | Iterable[fonts.Font | str] = (
-            fonts.GoogleFont("Outfit"), "Arial", "sans-serif",
-        ),
-        font_mono: fonts.Font | str | Iterable[fonts.Font | str] = (
-            fonts.GoogleFont("IBM Plex Mono"), "ui-monospace", "monospace",
-        ),
-    ):
-        super().__init__(
-            primary_hue=primary_hue,
-            secondary_hue=secondary_hue,
-            neutral_hue=neutral_hue,
-            text_size=text_size,
-            font=font,
-            font_mono=font_mono,
-        )
-        super().set(
-            background_fill_primary="*primary_50",
-            background_fill_primary_dark="*primary_900",
-            body_background_fill="linear-gradient(135deg, *primary_200, *primary_100)",
-            body_background_fill_dark="linear-gradient(135deg, *primary_900, *primary_800)",
-            button_primary_text_color="white",
-            button_primary_text_color_hover="white",
-            button_primary_background_fill="linear-gradient(90deg, *secondary_500, *secondary_600)",
-            button_primary_background_fill_hover="linear-gradient(90deg, *secondary_600, *secondary_700)",
-            button_primary_background_fill_dark="linear-gradient(90deg, *secondary_600, *secondary_700)",
-            button_primary_background_fill_hover_dark="linear-gradient(90deg, *secondary_500, *secondary_600)",
-            button_secondary_text_color="black",
-            button_secondary_text_color_hover="white",
-            button_secondary_background_fill="linear-gradient(90deg, *primary_300, *primary_300)",
-            button_secondary_background_fill_hover="linear-gradient(90deg, *primary_400, *primary_400)",
-            button_secondary_background_fill_dark="linear-gradient(90deg, *primary_500, *primary_600)",
-            button_secondary_background_fill_hover_dark="linear-gradient(90deg, *primary_500, *primary_500)",
-            slider_color="*secondary_500",
-            slider_color_dark="*secondary_600",
-            block_title_text_weight="600",
-            block_border_width="3px",
-            block_shadow="*shadow_drop_lg",
-            button_primary_shadow="*shadow_drop_lg",
-            button_large_padding="11px",
-            color_accent_soft="*primary_100",
-            block_label_background_fill="*primary_200",
-        )
-
-orange_red_theme = OrangeRedTheme()
+MAX_SEED = np.iinfo(np.int32).max
+LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -103,9 +39,9 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
     transformer=QwenImageTransformer2DModel.from_pretrained(
         "prithivMLmods/Qwen-Image-Edit-Rapid-AIO-V19",
         torch_dtype=dtype,
-        device_map='cuda'
+        device_map="cuda",
     ),
-    torch_dtype=dtype
+    torch_dtype=dtype,
 ).to(device)
 
 try:
@@ -114,186 +50,280 @@ try:
 except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
-MAX_SEED = np.iinfo(np.int32).max
-
+# ── LoRA adapter registry ──────────────────────────────────────────────────────
 ADAPTER_SPECS = {
     "Multiple-Angles": {
         "repo": "dx8152/Qwen-Edit-2509-Multiple-angles",
         "weights": "镜头转换.safetensors",
-        "adapter_name": "multiple-angles"
+        "adapter_name": "multiple-angles",
     },
     "Photo-to-Anime": {
         "repo": "autoweeb/Qwen-Image-Edit-2509-Photo-to-Anime",
         "weights": "Qwen-Image-Edit-2509-Photo-to-Anime_000001000.safetensors",
-        "adapter_name": "photo-to-anime"
+        "adapter_name": "photo-to-anime",
     },
     "Anime-V2": {
         "repo": "prithivMLmods/Qwen-Image-Edit-2511-Anime",
         "weights": "Qwen-Image-Edit-2511-Anime-2000.safetensors",
-        "adapter_name": "anime-v2"
+        "adapter_name": "anime-v2",
     },
     "Light-Migration": {
         "repo": "dx8152/Qwen-Edit-2509-Light-Migration",
         "weights": "参考色调.safetensors",
-        "adapter_name": "light-migration"
+        "adapter_name": "light-migration",
     },
     "Upscaler": {
         "repo": "starsfriday/Qwen-Image-Edit-2511-Upscale2K",
         "weights": "qwen_image_edit_2511_upscale.safetensors",
-        "adapter_name": "upscale-2k"
+        "adapter_name": "upscale-2k",
     },
     "Style-Transfer": {
         "repo": "zooeyy/Style-Transfer",
         "weights": "Style Transfer-Alpha-V0.1.safetensors",
-        "adapter_name": "style-transfer"
+        "adapter_name": "style-transfer",
     },
     "Manga-Tone": {
         "repo": "nappa114514/Qwen-Image-Edit-2509-Manga-Tone",
         "weights": "tone001.safetensors",
-        "adapter_name": "manga-tone"
+        "adapter_name": "manga-tone",
     },
     "Anything2Real": {
         "repo": "lrzjason/Anything2Real_2601",
         "weights": "anything2real_2601.safetensors",
-        "adapter_name": "anything2real"
+        "adapter_name": "anything2real",
     },
     "Fal-Multiple-Angles": {
         "repo": "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA",
         "weights": "qwen-image-edit-2511-multiple-angles-lora.safetensors",
-        "adapter_name": "fal-multiple-angles"
+        "adapter_name": "fal-multiple-angles",
     },
     "Polaroid-Photo": {
         "repo": "prithivMLmods/Qwen-Image-Edit-2511-Polaroid-Photo",
         "weights": "Qwen-Image-Edit-2511-Polaroid-Photo.safetensors",
-        "adapter_name": "polaroid-photo"
+        "adapter_name": "polaroid-photo",
     },
     "Unblur-Anything": {
         "repo": "prithivMLmods/Qwen-Image-Edit-2511-Unblur-Upscale",
         "weights": "Qwen-Image-Edit-Unblur-Upscale_15.safetensors",
-        "adapter_name": "unblur-anything"
+        "adapter_name": "unblur-anything",
     },
     "Midnight-Noir-Eyes-Spotlight": {
         "repo": "prithivMLmods/Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight",
         "weights": "Qwen-Image-Edit-2511-Midnight-Noir-Eyes-Spotlight.safetensors",
-        "adapter_name": "midnight-noir-eyes-spotlight"
+        "adapter_name": "midnight-noir-eyes-spotlight",
     },
     "Hyper-Realistic-Portrait": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Hyper-Realistic-Portrait",
-       "weights": "HRP_20.safetensors",
-       "adapter_name": "hyper-realistic-portrait"
-   },     
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Hyper-Realistic-Portrait",
+        "weights": "HRP_20.safetensors",
+        "adapter_name": "hyper-realistic-portrait",
+    },
     "Ultra-Realistic-Portrait": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Ultra-Realistic-Portrait",
-       "weights": "URP_20.safetensors",
-       "adapter_name": "ultra-realistic-portrait"
-   },     
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Ultra-Realistic-Portrait",
+        "weights": "URP_20.safetensors",
+        "adapter_name": "ultra-realistic-portrait",
+    },
     "Pixar-Inspired-3D": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Pixar-Inspired-3D",
-       "weights": "PI3_20.safetensors",
-       "adapter_name": "pi3"
-   },
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Pixar-Inspired-3D",
+        "weights": "PI3_20.safetensors",
+        "adapter_name": "pi3",
+    },
     "Noir-Comic-Book": {
-       "repo": "prithivMLmods/Qwen-Image-Edit-2511-Noir-Comic-Book-Panel",
-       "weights": "Noir-Comic-Book-Panel_20.safetensors",
-       "adapter_name": "ncb"
-   },  
+        "repo": "prithivMLmods/Qwen-Image-Edit-2511-Noir-Comic-Book-Panel",
+        "weights": "Noir-Comic-Book-Panel_20.safetensors",
+        "adapter_name": "ncb",
+    },
     "Any-light": {
-       "repo": "lilylilith/QIE-2511-MP-AnyLight",
-       "weights": "QIE-2511-AnyLight_.safetensors",
-       "adapter_name": "any-light"
-   }, 
+        "repo": "lilylilith/QIE-2511-MP-AnyLight",
+        "weights": "QIE-2511-AnyLight_.safetensors",
+        "adapter_name": "any-light",
+    },
     "Studio-DeLight": {
-       "repo": "prithivMLmods/QIE-2511-Studio-DeLight",
-       "weights": "QIE-2511-Studio-DeLight-5000.safetensors",
-       "adapter_name": "studio-delight"
-   }, 
+        "repo": "prithivMLmods/QIE-2511-Studio-DeLight",
+        "weights": "QIE-2511-Studio-DeLight-5000.safetensors",
+        "adapter_name": "studio-delight",
+    },
     "Cinematic-FlatLog": {
-       "repo": "prithivMLmods/QIE-2511-Cinematic-FlatLog-Control",
-       "weights": "QIE-2511-Cinematic-FlatLog-Control-3200.safetensors",
-       "adapter_name": "flat-log"
-   },   
+        "repo": "prithivMLmods/QIE-2511-Cinematic-FlatLog-Control",
+        "weights": "QIE-2511-Cinematic-FlatLog-Control-3200.safetensors",
+        "adapter_name": "flat-log",
+    },
 }
 
-LOADED_ADAPTERS = set()
+LOADED_ADAPTERS: set = set()
+
+ADAPTER_NAMES = list(ADAPTER_SPECS.keys())
+
+EXAMPLES_CONFIG = [
+    {"images": ["examples/B.jpg"],                          "prompt": "Transform into anime.",                                                                                           "lora": "Photo-to-Anime"},
+    {"images": ["examples/HRP.jpg"],                        "prompt": "Transform into a hyper-realistic face portrait.",                                                                 "lora": "Hyper-Realistic-Portrait"},
+    {"images": ["examples/A.jpeg"],                         "prompt": "Rotate the camera 45 degrees to the right.",                                                                      "lora": "Multiple-Angles"},
+    {"images": ["examples/U.jpg"],                          "prompt": "Upscale this picture to 4K resolution.",                                                                          "lora": "Upscaler"},
+    {"images": ["examples/L1.jpg", "examples/L2.jpg"],      "prompt": "Apply the lighting from image 2 to image 1.",                                                                     "lora": "Any-light"},
+    {"images": ["examples/PP1.jpg"],                        "prompt": "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed preserving realistic texture and details.", "lora": "Polaroid-Photo"},
+    {"images": ["examples/Z1.jpg"],                         "prompt": "Front-right quarter view.",                                                                                       "lora": "Fal-Multiple-Angles"},
+    {"images": ["examples/URP.jpg"],                        "prompt": "Transform into a cinematic flat log.",                                                                            "lora": "Cinematic-FlatLog"},
+    {"images": ["examples/SL.jpg"],                         "prompt": "Neutral uniform lighting. Preserve identity and composition.",                                                    "lora": "Studio-DeLight"},
+    {"images": ["examples/PI.jpg"],                         "prompt": "Transform it into Pixar-inspired 3D.",                                                                            "lora": "Pixar-Inspired-3D"},
+    {"images": ["examples/MT.jpg"],                         "prompt": "Paint with manga tone.",                                                                                          "lora": "Manga-Tone"},
+    {"images": ["examples/NCB.jpg"],                        "prompt": "Transform into a noir comic book style.",                                                                         "lora": "Noir-Comic-Book"},
+    {"images": ["examples/URP.jpg"],                        "prompt": "Ultra-realistic portrait.",                                                                                       "lora": "Ultra-Realistic-Portrait"},
+    {"images": ["examples/MN.jpg"],                         "prompt": "Transform into Midnight Noir Eyes Spotlight.",                                                                    "lora": "Midnight-Noir-Eyes-Spotlight"},
+    {"images": ["examples/ST1.jpg", "examples/ST2.jpg"],    "prompt": "Convert Image 1 to the style of Image 2.",                                                                        "lora": "Style-Transfer"},
+    {"images": ["examples/R1.jpg"],                         "prompt": "Change the picture to realistic photograph.",                                                                     "lora": "Anything2Real"},
+    {"images": ["examples/UA.jpeg"],                        "prompt": "Unblur and upscale.",                                                                                             "lora": "Unblur-Anything"},
+    {"images": ["examples/L1.jpg", "examples/L2.jpg"],      "prompt": "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "lora": "Light-Migration"},
+    {"images": ["examples/P1.jpg"],                         "prompt": "Transform into anime (while preserving the background and remaining elements maintaining realism and original details.)", "lora": "Anime-V2"},
+]
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+def make_thumb_b64(path, max_dim=220):
+    if not os.path.exists(path):
+        return ""
+    try:
+        img = Image.open(path).convert("RGB")
+        img.thumbnail((max_dim, max_dim), LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=65)
+        return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
+    except Exception as e:
+        print(f"Thumbnail error for {path}: {e}")
+        return ""
+
+
+def encode_full_image(path):
+    if not os.path.exists(path):
+        return ""
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+        ext = path.rsplit(".", 1)[-1].lower()
+        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+        return f"data:{mime};base64,{base64.b64encode(data).decode()}"
+    except Exception as e:
+        print(f"Encode error for {path}: {e}")
+        return ""
+
+
+def build_example_cards_html():
+    cards = ""
+    for i, ex in enumerate(EXAMPLES_CONFIG):
+        thumbs_html = ""
+        for path in ex["images"]:
+            thumb = make_thumb_b64(path)
+            if thumb:
+                thumbs_html += f'<img src="{thumb}" alt="">'
+            else:
+                thumbs_html += '<div class="example-thumb-placeholder">Preview</div>'
+        n = len(ex["images"])
+        img_badge = f'{n} image{"s" if n > 1 else ""}'
+        lora_badge = html_lib.escape(ex["lora"])
+        prompt_short = html_lib.escape(ex["prompt"][:85])
+        if len(ex["prompt"]) > 85:
+            prompt_short += "…"
+        cards += f'''<div class="example-card" data-idx="{i}">
+            <div class="example-thumbs">{thumbs_html}</div>
+            <div class="example-meta">
+                <span class="example-badge">{img_badge}</span>
+                <span class="example-lora-badge">{lora_badge}</span>
+            </div>
+            <div class="example-prompt-text">{prompt_short}</div>
+        </div>'''
+    return cards
+
+
+def load_example_data(idx_str):
+    try:
+        idx = int(float(idx_str)) if idx_str and idx_str.strip() else -1
+    except (ValueError, TypeError):
+        idx = -1
+    if idx < 0 or idx >= len(EXAMPLES_CONFIG):
+        return json.dumps({"images": [], "prompt": "", "lora": "", "names": [], "status": "error"})
+    ex = EXAMPLES_CONFIG[idx]
+    b64_list, names = [], []
+    for path in ex["images"]:
+        b64 = encode_full_image(path)
+        if b64:
+            b64_list.append(b64)
+            names.append(os.path.basename(path))
+    return json.dumps({"images": b64_list, "prompt": ex["prompt"], "lora": ex["lora"], "names": names, "status": "ok"})
+
+
+print("Building example thumbnails…")
+EXAMPLE_CARDS_HTML = build_example_cards_html()
+print(f"Built {len(EXAMPLES_CONFIG)} example cards.")
+
+
+def b64_to_pil_list(b64_json_str):
+    if not b64_json_str or b64_json_str.strip() in ("", "[]"):
+        return []
+    try:
+        b64_list = json.loads(b64_json_str)
+    except Exception:
+        return []
+    pil_images = []
+    for b64_str in b64_list:
+        if not b64_str or not isinstance(b64_str, str):
+            continue
+        try:
+            if b64_str.startswith("data:image"):
+                _, data = b64_str.split(",", 1)
+            else:
+                data = b64_str
+            image_data = base64.b64decode(data)
+            pil_images.append(Image.open(BytesIO(image_data)).convert("RGB"))
+        except Exception as e:
+            print(f"Error decoding image: {e}")
+    return pil_images
+
 
 def update_dimensions_on_upload(image):
     if image is None:
         return 1024, 1024
-    
-    original_width, original_height = image.size
-    
-    if original_width > original_height:
-        new_width = 1024
-        aspect_ratio = original_height / original_width
-        new_height = int(new_width * aspect_ratio)
+    w, h = image.size
+    if w > h:
+        nw = 1024
+        nh = int(nw * h / w)
     else:
-        new_height = 1024
-        aspect_ratio = original_width / original_height
-        new_width = int(new_height * aspect_ratio)
-        
-    new_width = (new_width // 8) * 8
-    new_height = (new_height // 8) * 8
-    
-    return new_width, new_height
+        nh = 1024
+        nw = int(nh * w / h)
+    return (nw // 8) * 8, (nh // 8) * 8
+
 
 @spaces.GPU
 def infer(
-    images,
+    images_b64_json,
     prompt,
     lora_adapter,
     seed,
     randomize_seed,
     guidance_scale,
     steps,
-    progress=gr.Progress(track_tqdm=True)
+    progress=gr.Progress(track_tqdm=True),
 ):
     gc.collect()
     torch.cuda.empty_cache()
 
-    if not images:
-        raise gr.Error("Please upload at least one image to edit.")
-
-    pil_images = []
-    if images is not None:
-        for item in images:
-            try:
-                if isinstance(item, tuple) or isinstance(item, list):
-                    path_or_img = item[0]
-                else:
-                    path_or_img = item
-
-                if isinstance(path_or_img, str):
-                    pil_images.append(Image.open(path_or_img).convert("RGB"))
-                elif isinstance(path_or_img, Image.Image):
-                    pil_images.append(path_or_img.convert("RGB"))
-                else:
-                    pil_images.append(Image.open(path_or_img.name).convert("RGB"))
-            except Exception as e:
-                print(f"Skipping invalid image item: {e}")
-                continue
-
+    pil_images = b64_to_pil_list(images_b64_json)
     if not pil_images:
-        raise gr.Error("Could not process uploaded images.")
+        raise gr.Error("Please upload at least one image to edit.")
+    if not prompt or prompt.strip() == "":
+        raise gr.Error("Please enter an edit prompt.")
 
     spec = ADAPTER_SPECS.get(lora_adapter)
     if not spec:
         raise gr.Error(f"Configuration not found for: {lora_adapter}")
 
     adapter_name = spec["adapter_name"]
-
     if adapter_name not in LOADED_ADAPTERS:
         print(f"--- Downloading and Loading Adapter: {lora_adapter} ---")
         try:
-            pipe.load_lora_weights(
-                spec["repo"], 
-                weight_name=spec["weights"], 
-                adapter_name=adapter_name
-            )
+            pipe.load_lora_weights(spec["repo"], weight_name=spec["weights"], adapter_name=adapter_name)
             LOADED_ADAPTERS.add(adapter_name)
         except Exception as e:
             raise gr.Error(f"Failed to load adapter {lora_adapter}: {e}")
     else:
-        print(f"--- Adapter {lora_adapter} is already loaded. ---")
+        print(f"--- Adapter {lora_adapter} already loaded. ---")
 
     pipe.set_adapters([adapter_name], adapter_weights=[1.0])
 
@@ -301,8 +331,10 @@ def infer(
         seed = random.randint(0, MAX_SEED)
 
     generator = torch.Generator(device=device).manual_seed(seed)
-    negative_prompt = "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
-
+    negative_prompt = (
+        "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, "
+        "extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
+    )
     width, height = update_dimensions_on_upload(pil_images[0])
 
     try:
@@ -316,121 +348,1060 @@ def infer(
             generator=generator,
             true_cfg_scale=guidance_scale,
         ).images[0]
-        
         return result_image, seed
-
     except Exception as e:
         raise e
     finally:
         gc.collect()
         torch.cuda.empty_cache()
 
-@spaces.GPU
-def infer_example(images, prompt, lora_adapter):
-    if not images:
-        return None, 0
-    
-    if isinstance(images, str):
-        images_list = [images]
-    else:
-        images_list = images
-        
-    result, seed = infer(
-        images=images_list,
-        prompt=prompt,
-        lora_adapter=lora_adapter,
-        seed=0,
-        randomize_seed=True,
-        guidance_scale=1.0,
-        steps=4
-    )
-    return result, seed
 
-css="""
-#col-container {
-    margin: 0 auto;
-    max-width: 1000px;
+# ── CSS ────────────────────────────────────────────────────────────────────────
+css = r"""
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+    --or:       #FF4500;
+    --or-dim:   #CC3700;
+    --or-bright:#FF6A33;
+    --or-glow:  rgba(255,69,0,.25);
+    --or-soft:  rgba(255,69,0,.10);
+    --or-xsoft: rgba(255,69,0,.06);
+    --bg:       #0d0d0f;
+    --bg1:      #141416;
+    --bg2:      #1a1a1d;
+    --bg3:      #222226;
+    --border:   #2a2a2e;
+    --border2:  #333338;
+    --text:     #e8e8ec;
+    --text2:    #9898a8;
+    --text3:    #555560;
+    --mono:     'JetBrains Mono', monospace;
 }
-#main-title h1 {font-size: 2.4em !important;}
+body,.gradio-container{
+    background:var(--bg)!important;
+    font-family:'Syne',system-ui,sans-serif!important;
+    font-size:14px!important;color:var(--text)!important;min-height:100vh;
+}
+.dark body,.dark .gradio-container{background:var(--bg)!important;color:var(--text)!important}
+footer{display:none!important}
+.hidden-input{display:none!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important}
+
+/* ── Off-screen Gradio trigger buttons ────────────────────────────────────── */
+#example-load-btn,#gradio-run-btn{
+    position:absolute!important;left:-9999px!important;top:-9999px!important;
+    width:1px!important;height:1px!important;opacity:.01!important;
+    pointer-events:none!important;overflow:hidden!important;
+}
+
+/* ── App shell ────────────────────────────────────────────────────────────── */
+.app-shell{
+    background:var(--bg1);border:1px solid var(--border);border-radius:18px;
+    margin:12px auto;max-width:1440px;overflow:hidden;
+    box-shadow:0 32px 64px -16px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.03),
+               0 0 60px -20px var(--or-glow);
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.app-header{
+    background:linear-gradient(135deg,var(--bg1),var(--bg2));
+    border-bottom:1px solid var(--border);
+    padding:14px 24px;display:flex;align-items:center;justify-content:space-between;
+    flex-wrap:wrap;gap:12px;
+}
+.app-header-left{display:flex;align-items:center;gap:12px}
+.app-logo{
+    width:38px;height:38px;
+    background:linear-gradient(135deg,var(--or),var(--or-bright));
+    border-radius:11px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 14px var(--or-glow);flex-shrink:0;
+}
+.app-logo svg{width:22px;height:22px;fill:#fff}
+.app-title{
+    font-size:18px;font-weight:800;letter-spacing:-.4px;
+    background:linear-gradient(135deg,#fff,#aaa);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.app-badge{
+    font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.3px;
+    background:var(--or-soft);color:var(--or-bright);border:1px solid rgba(255,69,0,.3);
+}
+.app-badge.fast{background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.25)}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+.app-toolbar{
+    background:var(--bg1);border-bottom:1px solid var(--border);
+    padding:7px 16px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;
+}
+.tb-sep{width:1px;height:28px;background:var(--border);margin:0 8px}
+.modern-tb-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    min-width:32px;height:34px;background:transparent;border:1px solid transparent;
+    border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;padding:0 12px;
+    font-family:'Syne',sans-serif;color:#fff!important;-webkit-text-fill-color:#fff!important;
+    transition:all .15s ease;
+}
+.modern-tb-btn:hover{background:var(--or-soft);border-color:rgba(255,69,0,.35)}
+.modern-tb-btn:active{background:rgba(255,69,0,.2);border-color:var(--or)}
+.modern-tb-btn .tb-label{font-size:13px;color:#fff!important;-webkit-text-fill-color:#fff!important;font-weight:700}
+.modern-tb-btn .tb-svg{width:15px;height:15px;flex-shrink:0}
+.modern-tb-btn .tb-svg,.modern-tb-btn .tb-svg *{stroke:#fff!important;fill:none!important}
+.tb-info{font-family:var(--mono);font-size:12px;color:var(--text3);padding:0 8px;display:flex;align-items:center}
+
+/* ── Main layout ──────────────────────────────────────────────────────────── */
+.app-main-row{display:flex;gap:0;flex:1;overflow:hidden}
+.app-main-left{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border)}
+.app-main-right{width:440px;display:flex;flex-direction:column;flex-shrink:0;background:var(--bg1)}
+
+/* ── Drop zone ────────────────────────────────────────────────────────────── */
+#gallery-drop-zone{position:relative;background:#09090b;min-height:440px;overflow:auto}
+#gallery-drop-zone.drag-over{outline:2px solid var(--or);outline-offset:-2px;background:var(--or-xsoft)}
+
+.upload-prompt-modern{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20}
+.upload-click-area{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    cursor:pointer;padding:36px 52px;border:2px dashed var(--border2);border-radius:16px;
+    background:var(--or-xsoft);transition:all .2s ease;gap:8px;
+}
+.upload-click-area:hover{background:rgba(255,69,0,.1);border-color:var(--or);transform:scale(1.03)}
+.upload-click-area:active{background:rgba(255,69,0,.15);transform:scale(.98)}
+.upload-click-area svg{width:80px;height:80px}
+.upload-main-text{color:var(--text2);font-size:14px;font-weight:600;margin-top:4px}
+.upload-sub-text{color:var(--text3);font-size:12px;font-weight:400;text-align:center;max-width:280px;line-height:1.5}
+
+/* ── Gallery grid ─────────────────────────────────────────────────────────── */
+.image-gallery-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+    gap:12px;padding:16px;align-content:start;
+}
+.gallery-thumb{
+    position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;
+    cursor:pointer;border:2px solid var(--border);transition:all .2s ease;background:var(--bg2);
+}
+.gallery-thumb:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.gallery-thumb.selected{border-color:var(--or)!important;box-shadow:0 0 0 3px var(--or-glow)}
+.gallery-thumb img{width:100%;height:100%;object-fit:cover}
+.thumb-badge{
+    position:absolute;top:6px;left:6px;background:var(--or);color:#fff;
+    padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;font-weight:600;
+}
+.thumb-remove{
+    position:absolute;top:6px;right:6px;width:24px;height:24px;background:rgba(0,0,0,.75);
+    color:#fff;border:1px solid rgba(255,255,255,.15);border-radius:50%;cursor:pointer;
+    display:none;align-items:center;justify-content:center;font-size:12px;transition:all .15s;line-height:1;
+}
+.gallery-thumb:hover .thumb-remove{display:flex}
+.thumb-remove:hover{background:var(--or);border-color:var(--or)}
+.gallery-add-card{
+    aspect-ratio:1;border-radius:10px;border:2px dashed var(--border2);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    cursor:pointer;transition:all .2s ease;background:var(--or-xsoft);gap:4px;
+}
+.gallery-add-card:hover{border-color:var(--or);background:var(--or-soft)}
+.gallery-add-card .add-icon{font-size:28px;color:var(--text3);font-weight:300}
+.gallery-add-card .add-text{font-size:12px;color:var(--text3);font-weight:600}
+
+/* ── Hint bar ─────────────────────────────────────────────────────────────── */
+.hint-bar{
+    background:rgba(255,69,0,.05);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:10px 20px;font-size:13px;color:var(--text2);line-height:1.7;font-weight:400;
+}
+.hint-bar b{color:#FF7A4D;font-weight:700}
+.hint-bar kbd{
+    display:inline-block;padding:1px 6px;background:var(--bg3);border:1px solid var(--border2);
+    border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--text2);
+}
+
+/* ── Suggestions ──────────────────────────────────────────────────────────── */
+.suggestions-section{border-top:1px solid var(--border);padding:12px 16px}
+.suggestions-title,.examples-title{
+    font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;
+    letter-spacing:1px;margin-bottom:10px;
+}
+.suggestions-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.suggestion-chip{
+    display:inline-flex;align-items:center;gap:4px;padding:5px 13px;
+    background:var(--or-soft);border:1px solid rgba(255,69,0,.25);border-radius:20px;
+    color:#FF7A4D;font-size:12px;font-weight:600;font-family:'Syne',sans-serif;
+    cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.suggestion-chip:hover{background:rgba(255,69,0,.18);border-color:var(--or);color:#fff;transform:translateY(-1px)}
+
+/* ── Examples section ─────────────────────────────────────────────────────── */
+.examples-section{border-top:1px solid var(--border);padding:14px 16px 18px}
+.examples-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;padding-top:2px}
+.examples-scroll::-webkit-scrollbar{height:5px}
+.examples-scroll::-webkit-scrollbar-track{background:var(--bg);border-radius:3px}
+.examples-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.examples-scroll::-webkit-scrollbar-thumb:hover{background:var(--or-dim)}
+.example-card{
+    flex-shrink:0;width:220px;background:var(--bg2);border:1px solid var(--border);
+    border-radius:12px;overflow:hidden;cursor:pointer;transition:all .2s ease;
+}
+.example-card:hover{border-color:var(--or);transform:translateY(-3px);box-shadow:0 6px 20px var(--or-glow)}
+.example-card:active{transform:translateY(-1px)}
+.example-card.loading{opacity:.5;pointer-events:none}
+.example-thumbs{display:flex;height:115px;overflow:hidden;background:var(--bg3)}
+.example-thumbs img{flex:1;object-fit:cover;min-width:0}
+.example-thumb-placeholder{
+    flex:1;display:flex;align-items:center;justify-content:center;
+    background:var(--bg3);color:var(--text3);font-size:11px;min-width:0;
+}
+.example-meta{padding:7px 10px 3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.example-badge{
+    display:inline-flex;padding:2px 7px;background:var(--or-soft);border-radius:4px;
+    font-size:10px;font-weight:700;color:var(--or-bright);font-family:var(--mono);white-space:nowrap;
+    border:1px solid rgba(255,69,0,.2);
+}
+.example-lora-badge{
+    display:inline-flex;padding:2px 7px;background:rgba(255,255,255,.06);border-radius:4px;
+    font-size:10px;font-weight:600;color:var(--text2);font-family:var(--mono);white-space:nowrap;
+    border:1px solid var(--border);max-width:120px;overflow:hidden;text-overflow:ellipsis;
+}
+.example-prompt-text{
+    padding:2px 10px 10px;font-size:11.5px;color:var(--text2);line-height:1.45;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    font-weight:400;
+}
+
+/* ── Right panel cards ────────────────────────────────────────────────────── */
+.panel-card{border-bottom:1px solid var(--border)}
+.panel-card-title{
+    padding:11px 20px;font-size:11px;font-weight:700;color:var(--text3);
+    text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid rgba(42,42,46,.6);
+}
+.panel-card-body{padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.modern-label{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:4px;display:block}
+.modern-textarea{
+    width:100%;background:#09090b;border:1px solid var(--border);border-radius:8px;
+    padding:10px 14px;font-family:'Syne',sans-serif;font-size:14px;color:var(--text);
+    resize:vertical;outline:none;min-height:44px;transition:border-color .2s;font-weight:400;
+}
+.modern-textarea:focus{border-color:var(--or);box-shadow:0 0 0 3px var(--or-glow)}
+.modern-textarea::placeholder{color:var(--text3)}
+.modern-textarea.error-flash{
+    border-color:#ef4444!important;box-shadow:0 0 0 3px rgba(239,68,68,.2)!important;
+    animation:shake .4s ease;
+}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}
+
+/* ── LoRA selector ────────────────────────────────────────────────────────── */
+.lora-selector-card{border-bottom:1px solid var(--border)}
+.lora-selector-body{padding:12px 18px}
+.lora-select-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.lora-select-label::before{content:'';display:inline-block;width:8px;height:8px;background:var(--or);border-radius:50%}
+.lora-native-select{
+    width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;
+    padding:9px 14px;font-family:'Syne',sans-serif;font-size:13px;font-weight:600;
+    color:var(--text);outline:none;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23FF4500' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;
+    padding-right:36px;cursor:pointer;transition:border-color .2s;
+}
+.lora-native-select:focus{border-color:var(--or);box-shadow:0 0 0 3px var(--or-glow)}
+.lora-native-select option{background:#1a1a1d;color:var(--text)}
+
+/* ── Toast ────────────────────────────────────────────────────────────────── */
+.toast-notification{
+    position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-120%);
+    z-index:9999;padding:10px 24px;border-radius:10px;font-family:'Syne',sans-serif;
+    font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+    transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .35s ease;opacity:0;pointer-events:none;
+}
+.toast-notification.visible{transform:translateX(-50%) translateY(0);opacity:1;pointer-events:auto}
+.toast-notification.error{background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:1px solid rgba(255,255,255,.15)}
+.toast-notification.warning{background:linear-gradient(135deg,var(--or),var(--or-dim));color:#fff;border:1px solid rgba(255,255,255,.15)}
+.toast-notification.info{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid rgba(255,255,255,.15)}
+.toast-notification .toast-icon{font-size:16px;line-height:1}
+
+/* ── Run button ───────────────────────────────────────────────────────────── */
+.btn-run{
+    display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    background:linear-gradient(135deg,var(--or),var(--or-dim));border:none;border-radius:10px;
+    padding:13px 24px;cursor:pointer;font-size:15px;font-weight:800;font-family:'Syne',sans-serif;
+    color:#fff!important;-webkit-text-fill-color:#fff!important;transition:all .2s ease;letter-spacing:.2px;
+    box-shadow:0 4px 20px var(--or-glow),inset 0 1px 0 rgba(255,255,255,.12);
+}
+.btn-run:hover{
+    background:linear-gradient(135deg,var(--or-bright),var(--or));transform:translateY(-1px);
+    box-shadow:0 8px 28px rgba(255,69,0,.45),inset 0 1px 0 rgba(255,255,255,.15);
+}
+.btn-run:active{transform:translateY(0);box-shadow:0 2px 10px var(--or-glow)}
+.btn-run svg{width:18px;height:18px;fill:#fff!important}
+#custom-run-btn,#custom-run-btn *,#run-btn-label,.btn-run,.btn-run *{
+    color:#fff!important;-webkit-text-fill-color:#fff!important;fill:#fff!important;
+}
+
+/* ── Output frame ─────────────────────────────────────────────────────────── */
+.output-frame{border-bottom:1px solid var(--border);display:flex;flex-direction:column;position:relative}
+.out-title{
+    padding:10px 20px;font-size:11px;font-weight:700;color:#fff!important;
+    -webkit-text-fill-color:#fff!important;text-transform:uppercase;letter-spacing:1px;
+    border-bottom:1px solid rgba(42,42,46,.6);display:flex;align-items:center;justify-content:space-between;
+}
+.out-body{
+    flex:1;background:#09090b;display:flex;align-items:center;justify-content:center;
+    overflow:hidden;min-height:240px;position:relative;
+}
+.out-body img{max-width:100%;max-height:460px;image-rendering:auto}
+.out-placeholder{color:var(--text3);font-size:13px;text-align:center;padding:20px;font-weight:500}
+.out-download-btn{
+    display:none;align-items:center;justify-content:center;background:var(--or-soft);
+    border:1px solid rgba(255,69,0,.25);border-radius:6px;cursor:pointer;padding:3px 10px;
+    font-size:11px;font-weight:700;color:var(--or-bright)!important;gap:4px;height:24px;transition:all .15s;
+}
+.out-download-btn:hover{background:var(--or);border-color:var(--or);color:#fff!important}
+.out-download-btn.visible{display:inline-flex}
+.out-download-btn svg{width:12px;height:12px;fill:var(--or-bright)}
+
+/* ── Loader ───────────────────────────────────────────────────────────────── */
+.modern-loader{
+    display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(9,9,11,.93);
+    z-index:15;flex-direction:column;align-items:center;justify-content:center;gap:16px;backdrop-filter:blur(4px);
+}
+.modern-loader.active{display:flex}
+.modern-loader .loader-spinner{
+    width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--or);
+    border-radius:50%;animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modern-loader .loader-text{font-size:13px;color:var(--text2);font-weight:600}
+.loader-bar-track{width:200px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.loader-bar-fill{
+    height:100%;background:linear-gradient(90deg,var(--or),var(--or-bright),var(--or));
+    background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:2px;
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── Advanced settings ────────────────────────────────────────────────────── */
+.settings-group{border:1px solid var(--border);border-radius:10px;margin:12px 16px;padding:0;overflow:hidden}
+.settings-group-title{
+    font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;
+    padding:9px 16px;border-bottom:1px solid var(--border);background:rgba(26,26,29,.5);
+}
+.settings-group-body{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.slider-row{display:flex;align-items:center;gap:10px;min-height:28px}
+.slider-row label{font-size:13px;font-weight:600;color:var(--text2);min-width:72px;flex-shrink:0}
+.slider-row input[type="range"]{
+    flex:1;-webkit-appearance:none;appearance:none;height:5px;background:var(--border2);
+    border-radius:3px;outline:none;min-width:0;
+}
+.slider-row input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:16px;height:16px;
+    background:linear-gradient(135deg,var(--or),var(--or-dim));
+    border-radius:50%;cursor:pointer;box-shadow:0 2px 6px var(--or-glow);transition:transform .15s;
+}
+.slider-row input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+.slider-row input[type="range"]::-moz-range-thumb{
+    width:16px;height:16px;background:linear-gradient(135deg,var(--or),var(--or-dim));
+    border-radius:50%;cursor:pointer;border:none;box-shadow:0 2px 6px var(--or-glow);
+}
+.slider-row .slider-val{
+    min-width:52px;text-align:right;font-family:var(--mono);font-size:12px;
+    font-weight:500;padding:3px 8px;background:#09090b;border:1px solid var(--border);
+    border-radius:6px;color:var(--text2);flex-shrink:0;
+}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)}
+.checkbox-row input[type="checkbox"]{accent-color:var(--or);width:16px;height:16px;cursor:pointer}
+.checkbox-row label{color:var(--text2);font-size:13px;cursor:pointer;font-weight:500}
+
+/* ── Status bar ───────────────────────────────────────────────────────────── */
+.app-statusbar{
+    background:var(--bg1);border-top:1px solid var(--border);padding:6px 20px;
+    display:flex;gap:12px;height:34px;align-items:center;font-size:12px;
+}
+.app-statusbar .sb-section{
+    padding:0 12px;flex:1;display:flex;align-items:center;font-family:var(--mono);
+    font-size:12px;color:var(--text3);overflow:hidden;white-space:nowrap;
+}
+.app-statusbar .sb-section.sb-fixed{
+    flex:0 0 auto;min-width:90px;text-align:center;justify-content:center;
+    padding:3px 12px;background:var(--or-soft);border-radius:6px;
+    color:var(--or-bright);font-weight:700;border:1px solid rgba(255,69,0,.2);
+}
+.exp-note{padding:10px 20px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);text-align:center;font-weight:500}
+.exp-note a{color:var(--or-bright);text-decoration:none}
+.exp-note a:hover{text-decoration:underline;color:#fff}
+
+/* ── Scrollbars ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:7px;height:7px}
+::-webkit-scrollbar-track{background:#09090b}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--or-dim)}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media(max-width:860px){
+    .app-main-row{flex-direction:column}
+    .app-main-right{width:100%}
+    .app-main-left{border-right:none;border-bottom:1px solid var(--border)}
+}
 """
 
-with gr.Blocks() as demo:
-    with gr.Column(elem_id="col-container"):
-        gr.Markdown("# **Qwen-Image-Edit-2511-LoRAs-Fast**", elem_id="main-title")
-        gr.Markdown("Perform diverse image edits using specialized [LoRA](https://huggingface.co/models?other=base_model:adapter:Qwen/Qwen-Image-Edit-2511) adapters. Open on [GitHub](https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load).")
+# ── JavaScript ─────────────────────────────────────────────────────────────────
+gallery_js = r"""
+() => {
+function init() {
+    if (window.__qwenInitDone) return;
 
-        with gr.Row(equal_height=True):
-            with gr.Column():
-                images = gr.Gallery(
-                    label="Upload Images", 
-                    type="filepath", 
-                    columns=2, 
-                    rows=1, 
-                    height=300,
-                    allow_preview=True
-                )
-                
-                prompt = gr.Text(
-                    label="Edit Prompt",
-                    max_lines=1,
-                    show_label=True,
-                    placeholder="e.g., transform into anime..",
-                )
+    const galleryGrid  = document.getElementById('image-gallery-grid');
+    const dropZone     = document.getElementById('gallery-drop-zone');
+    const uploadPrompt = document.getElementById('upload-prompt');
+    const uploadClick  = document.getElementById('upload-click-area');
+    const fileInput    = document.getElementById('custom-file-input');
+    const btnUpload    = document.getElementById('tb-upload');
+    const btnRemove    = document.getElementById('tb-remove');
+    const btnClear     = document.getElementById('tb-clear');
+    const promptInput  = document.getElementById('custom-prompt-input');
+    const loraSelect   = document.getElementById('custom-lora-select');
+    const runBtnEl     = document.getElementById('custom-run-btn');
+    const imgCountTb   = document.getElementById('tb-image-count');
+    const imgCountSb   = document.getElementById('sb-image-count');
 
-                run_button = gr.Button("Edit Image", variant="primary")
+    if (!galleryGrid || !fileInput || !dropZone) { setTimeout(init, 250); return; }
+    window.__qwenInitDone = true;
 
-            with gr.Column():
-                output_image = gr.Image(label="Output Image", interactive=False, format="png", height=365)
-                
-                with gr.Row():
-                    lora_adapter = gr.Dropdown(
-                        label="Choose Editing Style",
-                        choices=list(ADAPTER_SPECS.keys()),
-                        value="Photo-to-Anime"
-                    )
-                
-                with gr.Accordion("Advanced Settings", open=False, visible=False):
-                    seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
-                    randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
-                    guidance_scale = gr.Slider(label="Guidance Scale", minimum=1.0, maximum=10.0, step=0.1, value=1.0)
-                    steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=4)
-        
-        gr.Examples(
-            examples=[
-                [["examples/B.jpg"], "Transform into anime.", "Photo-to-Anime"],
-                [["examples/HRP.jpg"], "Transform into a hyper-realistic face portrait.", "Hyper-Realistic-Portrait"],
-                [["examples/A.jpeg"], "Rotate the camera 45 degrees to the right.", "Multiple-Angles"],
-                [["examples/U.jpg"], "Upscale this picture to 4K resolution.", "Upscaler"],
-                [["examples/L1.jpg", "examples/L2.jpg"], "Apply the lighting from image 2 to image 1.", "Any-light"],
-                [["examples/PP1.jpg"], "cinematic polaroid with soft grain subtle vignette gentle lighting white frame handwritten photographed by hf‪‪‬ preserving realistic texture and details", "Polaroid-Photo"],
-                [["examples/Z1.jpg"], "Front-right quarter view.", "Fal-Multiple-Angles"],
-                [["examples/URP.jpg"], "Transform into a cinematic flat log.", "Cinematic-FlatLog"],
-                [["examples/SL.jpg"], "Neutral uniform lighting Preserve identity and composition.", "Studio-DeLight"],
-                [["examples/PI.jpg"], "Transform it into Pixar-inspired 3D.", "Pixar-Inspired-3D"],
-                [["examples/MT.jpg"], "Paint with manga tone.", "Manga-Tone"],
-                [["examples/NCB.jpg"], "Transform into a noir comic book style.", "Noir-Comic-Book"],
-                [["examples/URP.jpg"], "ultra-realistic portrait.", "Ultra-Realistic-Portrait"],
-                [["examples/MN.jpg"], "Transform into Midnight Noir Eyes Spotlight.", "Midnight-Noir-Eyes-Spotlight"],
-                [["examples/ST1.jpg", "examples/ST2.jpg"], "Convert Image 1 to the style of Image 2.", "Style-Transfer"],
-                [["examples/R1.jpg"], "Change the picture to realistic photograph.", "Anything2Real"],
-                [["examples/UA.jpeg"], "Unblur and upscale.", "Unblur-Anything"],
-                [["examples/L1.jpg", "examples/L2.jpg"], "Refer to the color tone, remove the original lighting from Image 1, and relight Image 1 based on the lighting and color tone of Image 2.", "Light-Migration"],
-                [["examples/P1.jpg"], "Transform into anime (while preserving the background and remaining elements maintaining realism and original details.)", "Anime-V2"],
-            ],
-            inputs=[images, prompt, lora_adapter],
-            outputs=[output_image, seed],
-            fn=infer_example,
-            cache_examples=False,
-            label="Examples"
-        )
-        
-        gr.Markdown("[*](https://huggingface.co/spaces/prithivMLmods/Qwen-Image-Edit-2511-LoRAs-Fast)This is still an experimental Space for Qwen-Image-Edit-2511.")
+    let images = [];
+    window.__uploadedImages = images;
+    let selectedIdx = -1;
+    let toastTimer = null;
 
-    run_button.click(
+    function showToast(message, type) {
+        let toast = document.getElementById('app-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'app-toast';
+            toast.className = 'toast-notification';
+            toast.innerHTML = '<span class="toast-icon"></span><span class="toast-text"></span>';
+            document.body.appendChild(toast);
+        }
+        const icon = toast.querySelector('.toast-icon');
+        const text = toast.querySelector('.toast-text');
+        toast.className = 'toast-notification ' + (type || 'error');
+        if (type === 'warning') icon.textContent = '\u26A0';
+        else if (type === 'info') icon.textContent = '\u2139';
+        else icon.textContent = '\u2717';
+        text.textContent = message;
+        if (toastTimer) clearTimeout(toastTimer);
+        void toast.offsetWidth;
+        toast.classList.add('visible');
+        toastTimer = setTimeout(() => toast.classList.remove('visible'), 3500);
+    }
+    window.__showToast = showToast;
+
+    function flashPromptError() {
+        if (!promptInput) return;
+        promptInput.classList.add('error-flash');
+        promptInput.focus();
+        setTimeout(() => promptInput.classList.remove('error-flash'), 800);
+    }
+
+    function setGradioValue(containerId, value) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.querySelectorAll('input, textarea').forEach(el => {
+            if (el.type === 'file' || el.type === 'range' || el.type === 'checkbox') return;
+            const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const ns = Object.getOwnPropertyDescriptor(proto, 'value');
+            if (ns && ns.set) {
+                ns.set.call(el, value);
+                el.dispatchEvent(new Event('input',  {bubbles:true, composed:true}));
+                el.dispatchEvent(new Event('change', {bubbles:true, composed:true}));
+            }
+        });
+    }
+    window.__setGradioValue = setGradioValue;
+
+    function syncImagesToGradio() {
+        window.__uploadedImages = images;
+        const b64Array = images.map(img => img.b64);
+        setGradioValue('hidden-images-b64', JSON.stringify(b64Array));
+        updateCounts();
+    }
+
+    function syncPromptToGradio() {
+        if (promptInput) setGradioValue('prompt-gradio-input', promptInput.value);
+    }
+
+    function syncLoraToGradio() {
+        if (!loraSelect) return;
+        const container = document.getElementById('gradio-lora');
+        if (!container) return;
+        // Try Gradio dropdown internal select
+        container.querySelectorAll('input').forEach(el => {
+            const proto = HTMLInputElement.prototype;
+            const ns = Object.getOwnPropertyDescriptor(proto, 'value');
+            if (ns && ns.set) {
+                ns.set.call(el, loraSelect.value);
+                el.dispatchEvent(new Event('input',  {bubbles:true, composed:true}));
+                el.dispatchEvent(new Event('change', {bubbles:true, composed:true}));
+            }
+        });
+    }
+
+    function updateCounts() {
+        const n = images.length;
+        const txt = n > 0 ? n + ' image' + (n > 1 ? 's' : '') : 'No images';
+        if (imgCountTb) imgCountTb.textContent = txt;
+        if (imgCountSb) imgCountSb.textContent = n > 0 ? txt + ' uploaded' : 'No images uploaded';
+    }
+
+    function addImage(b64, name) {
+        images.push({id: Date.now() + Math.random(), b64: b64, name: name});
+        renderGallery();
+        syncImagesToGradio();
+    }
+    window.__addImage = addImage;
+
+    function removeImage(idx) {
+        images.splice(idx, 1);
+        if (selectedIdx === idx) selectedIdx = -1;
+        else if (selectedIdx > idx) selectedIdx--;
+        renderGallery();
+        syncImagesToGradio();
+    }
+
+    function clearAll() {
+        images = [];
+        window.__uploadedImages = images;
+        selectedIdx = -1;
+        renderGallery();
+        syncImagesToGradio();
+    }
+    window.__clearAll = clearAll;
+
+    function renderGallery() {
+        if (images.length === 0) {
+            galleryGrid.innerHTML = '';
+            galleryGrid.style.display = 'none';
+            if (uploadPrompt) uploadPrompt.style.display = '';
+            return;
+        }
+        if (uploadPrompt) uploadPrompt.style.display = 'none';
+        galleryGrid.style.display = 'grid';
+        let html = '';
+        images.forEach((img, i) => {
+            const sel = i === selectedIdx ? ' selected' : '';
+            html += '<div class="gallery-thumb' + sel + '" data-idx="' + i + '">'
+                  + '<img src="' + img.b64 + '" alt="' + (img.name||'image') + '">'
+                  + '<span class="thumb-badge">#' + (i+1) + '</span>'
+                  + '<button class="thumb-remove" data-remove="' + i + '">\u2715</button>'
+                  + '</div>';
+        });
+        html += '<div class="gallery-add-card" id="gallery-add-card">'
+              + '<span class="add-icon">+</span>'
+              + '<span class="add-text">Add</span>'
+              + '</div>';
+        galleryGrid.innerHTML = html;
+        galleryGrid.querySelectorAll('.gallery-thumb').forEach(thumb => {
+            thumb.addEventListener('click', (e) => {
+                if (e.target.closest('.thumb-remove')) return;
+                selectedIdx = (selectedIdx === parseInt(thumb.dataset.idx)) ? -1 : parseInt(thumb.dataset.idx);
+                renderGallery();
+            });
+        });
+        galleryGrid.querySelectorAll('.thumb-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); removeImage(parseInt(btn.dataset.remove)); });
+        });
+        const addCard = document.getElementById('gallery-add-card');
+        if (addCard) addCard.addEventListener('click', () => fileInput.click());
+    }
+
+    function processFiles(files) {
+        Array.from(files).forEach(file => {
+            if (!file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => addImage(e.target.result, file.name);
+            reader.readAsDataURL(file);
+        });
+    }
+
+    fileInput.addEventListener('change', (e) => { processFiles(e.target.files); e.target.value = ''; });
+    if (uploadClick) uploadClick.addEventListener('click', () => fileInput.click());
+    if (btnUpload)  btnUpload.addEventListener('click', () => fileInput.click());
+    if (btnRemove)  btnRemove.addEventListener('click', () => { if (selectedIdx >= 0) removeImage(selectedIdx); });
+    if (btnClear)   btnClear.addEventListener('click', clearAll);
+
+    dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop',      (e) => {
+        e.preventDefault(); dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files);
+    });
+
+    if (promptInput) promptInput.addEventListener('input', syncPromptToGradio);
+    if (loraSelect)  loraSelect.addEventListener('change', syncLoraToGradio);
+
+    window.__setPrompt = function(text) { if (promptInput) { promptInput.value = text; syncPromptToGradio(); } };
+    window.__setLora   = function(lora) {
+        if (loraSelect) {
+            loraSelect.value = lora;
+            loraSelect.dispatchEvent(new Event('change', {bubbles:true}));
+            syncLoraToGradio();
+        }
+    };
+
+    // Example card click handler
+    document.querySelectorAll('.example-card[data-idx]').forEach(card => {
+        card.addEventListener('click', () => {
+            const idx = card.getAttribute('data-idx');
+            document.querySelectorAll('.example-card.loading').forEach(c => c.classList.remove('loading'));
+            card.classList.add('loading');
+            showToast('Loading example…', 'info');
+            setGradioValue('example-result-data', '');
+            setGradioValue('example-idx-input', idx);
+            setTimeout(() => {
+                const btn = document.getElementById('example-load-btn');
+                if (btn) { const b = btn.querySelector('button'); if (b) b.click(); else btn.click(); }
+            }, 150);
+            setTimeout(() => card.classList.remove('loading'), 12000);
+        });
+    });
+
+    // Sync custom sliders to hidden Gradio components
+    function syncSlider(customId, gradioId) {
+        const slider = document.getElementById(customId);
+        const valSpan = document.getElementById(customId + '-val');
+        if (!slider) return;
+        slider.addEventListener('input', () => {
+            if (valSpan) valSpan.textContent = slider.value;
+            const container = document.getElementById(gradioId);
+            if (!container) return;
+            container.querySelectorAll('input[type="range"],input[type="number"]').forEach(el => {
+                const ns = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                if (ns && ns.set) {
+                    ns.set.call(el, slider.value);
+                    el.dispatchEvent(new Event('input',  {bubbles:true, composed:true}));
+                    el.dispatchEvent(new Event('change', {bubbles:true, composed:true}));
+                }
+            });
+        });
+    }
+    syncSlider('custom-seed', 'gradio-seed');
+    syncSlider('custom-guidance', 'gradio-guidance');
+    syncSlider('custom-steps', 'gradio-steps');
+
+    const randCheck = document.getElementById('custom-randomize');
+    if (randCheck) {
+        randCheck.addEventListener('change', () => {
+            const container = document.getElementById('gradio-randomize');
+            if (!container) return;
+            const cb = container.querySelector('input[type="checkbox"]');
+            if (cb && cb.checked !== randCheck.checked) cb.click();
+        });
+    }
+
+    function showLoader() {
+        const l = document.getElementById('output-loader');
+        if (l) l.classList.add('active');
+        const sb = document.querySelector('.sb-fixed');
+        if (sb) sb.textContent = 'Processing…';
+    }
+    function hideLoader() {
+        const l = document.getElementById('output-loader');
+        if (l) l.classList.remove('active');
+        const sb = document.querySelector('.sb-fixed');
+        if (sb) sb.textContent = 'Done';
+    }
+    window.__showLoader = showLoader;
+    window.__hideLoader = hideLoader;
+
+    function validateBeforeRun() {
+        const promptVal = promptInput ? promptInput.value.trim() : '';
+        const hasImages = images.length > 0;
+        if (!hasImages && !promptVal) { showToast('Please upload an image and enter a prompt', 'error'); flashPromptError(); return false; }
+        if (!hasImages) { showToast('Please upload at least one image', 'error'); return false; }
+        if (!promptVal) { showToast('Please enter an edit prompt', 'warning'); flashPromptError(); return false; }
+        return true;
+    }
+
+    window.__clickGradioRunBtn = function() {
+        if (!validateBeforeRun()) return;
+        syncPromptToGradio(); syncImagesToGradio(); syncLoraToGradio(); showLoader();
+        setTimeout(() => {
+            const gradioBtn = document.getElementById('gradio-run-btn');
+            if (!gradioBtn) return;
+            const btn = gradioBtn.querySelector('button');
+            if (btn) btn.click(); else gradioBtn.click();
+        }, 200);
+    };
+
+    if (runBtnEl) runBtnEl.addEventListener('click', () => window.__clickGradioRunBtn());
+
+    renderGallery();
+    updateCounts();
+}
+init();
+}
+"""
+
+wire_outputs_js = r"""
+() => {
+function watchOutputs() {
+    const resultContainer = document.getElementById('gradio-result');
+    const outBody  = document.getElementById('output-image-container');
+    const outPh    = document.getElementById('output-placeholder');
+    const dlBtn    = document.getElementById('dl-btn-output');
+
+    if (!resultContainer || !outBody) { setTimeout(watchOutputs, 500); return; }
+
+    if (dlBtn) {
+        dlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const img = outBody.querySelector('img.modern-out-img');
+            if (img && img.src) {
+                const a = document.createElement('a');
+                a.href = img.src; a.download = 'qwen_edit_output.png';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            }
+        });
+    }
+
+    function syncImage() {
+        const resultImg = resultContainer.querySelector('img');
+        if (resultImg && resultImg.src) {
+            if (outPh) outPh.style.display = 'none';
+            let existing = outBody.querySelector('img.modern-out-img');
+            if (!existing) { existing = document.createElement('img'); existing.className = 'modern-out-img'; outBody.appendChild(existing); }
+            if (existing.src !== resultImg.src) {
+                existing.src = resultImg.src;
+                if (dlBtn) dlBtn.classList.add('visible');
+                if (window.__hideLoader) window.__hideLoader();
+            }
+        }
+    }
+    const observer = new MutationObserver(syncImage);
+    observer.observe(resultContainer, {childList:true, subtree:true, attributes:true, attributeFilter:['src']});
+    setInterval(syncImage, 800);
+}
+watchOutputs();
+
+function watchSeed() {
+    const seedContainer = document.getElementById('gradio-seed');
+    const seedSlider    = document.getElementById('custom-seed');
+    const seedVal       = document.getElementById('custom-seed-val');
+    if (!seedContainer || !seedSlider) { setTimeout(watchSeed, 500); return; }
+    function sync() {
+        const el = seedContainer.querySelector('input[type="range"],input[type="number"]');
+        if (el && el.value) { seedSlider.value = el.value; if (seedVal) seedVal.textContent = el.value; }
+    }
+    const obs = new MutationObserver(sync);
+    obs.observe(seedContainer, {childList:true, subtree:true, attributes:true, attributeFilter:['value']});
+    setInterval(sync, 1000);
+}
+watchSeed();
+
+function watchExampleResults() {
+    const container = document.getElementById('example-result-data');
+    if (!container) { setTimeout(watchExampleResults, 500); return; }
+    let lastProcessed = '';
+
+    function checkResult() {
+        const el = container.querySelector('textarea') || container.querySelector('input');
+        if (!el) return;
+        const val = el.value;
+        if (!val || val === lastProcessed || val.length < 20) return;
+        try {
+            const data = JSON.parse(val);
+            if (data.status === 'ok' && data.images && data.images.length > 0) {
+                lastProcessed = val;
+                if (window.__clearAll) window.__clearAll();
+                if (window.__setPrompt && data.prompt) window.__setPrompt(data.prompt);
+                if (window.__setLora   && data.lora)   window.__setLora(data.lora);
+                data.images.forEach((b64, i) => {
+                    if (b64 && window.__addImage) {
+                        const name = (data.names && data.names[i]) ? data.names[i] : ('example_' + (i+1) + '.jpg');
+                        window.__addImage(b64, name);
+                    }
+                });
+                document.querySelectorAll('.example-card.loading').forEach(c => c.classList.remove('loading'));
+                if (window.__showToast) window.__showToast('Example loaded — ' + data.images.length + ' image(s)', 'info');
+            } else if (data.status === 'error') {
+                document.querySelectorAll('.example-card.loading').forEach(c => c.classList.remove('loading'));
+                if (window.__showToast) window.__showToast('Could not load example images', 'error');
+            }
+        } catch(e) { console.error('Example parse error:', e); }
+    }
+
+    const obs = new MutationObserver(checkResult);
+    obs.observe(container, {childList:true, subtree:true, characterData:true, attributes:true});
+    setInterval(checkResult, 500);
+}
+watchExampleResults();
+}
+"""
+
+# ── SVG assets ─────────────────────────────────────────────────────────────────
+ROCKET_LOGO_SVG = '''<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+  <path d="M12 2C12 2 7 6.5 7 13c0 1.4.3 2.7.8 3.9L5 19.7l1.4 1.4 2.8-2.8c1.2.5 2.5.7 3.8.7s2.6-.2 3.8-.7l2.8 2.8 1.4-1.4-2.8-2.8c.5-1.2.8-2.5.8-3.9 0-6.5-5-11-5-11z"/>
+  <circle cx="12" cy="13" r="2"/>
+  <path d="M9 21c0 1.1.9 2 2 2h2c1.1 0 2-.9 2-2v-1H9v1z"/>
+</svg>'''
+
+UPLOAD_SVG = '<svg class="tb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+REMOVE_SVG = '<svg class="tb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+CLEAR_SVG  = '<svg class="tb-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>'
+DOWNLOAD_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 16l-5-5h3V4h4v7h3l-5 5z" fill="currentColor"/><path d="M20 18H4v2h16v-2z" fill="currentColor"/></svg>'
+
+# Build LoRA <option> list
+LORA_OPTIONS_HTML = "\n".join(
+    f'<option value="{html_lib.escape(name)}">{html_lib.escape(name)}</option>'
+    for name in ADAPTER_NAMES
+)
+
+# ── Gradio app ─────────────────────────────────────────────────────────────────
+with gr.Blocks(css=css) as demo:
+
+    # Hidden Gradio state components
+    hidden_images_b64 = gr.Textbox(value="[]",  elem_id="hidden-images-b64",   elem_classes="hidden-input", container=False)
+    prompt            = gr.Textbox(value="",    elem_id="prompt-gradio-input",  elem_classes="hidden-input", container=False)
+    lora_adapter      = gr.Dropdown(choices=ADAPTER_NAMES, value="Photo-to-Anime", elem_id="gradio-lora", elem_classes="hidden-input", container=False)
+    seed              = gr.Slider(minimum=0, maximum=MAX_SEED, step=1, value=0, elem_id="gradio-seed",       elem_classes="hidden-input", container=False)
+    randomize_seed    = gr.Checkbox(value=True, elem_id="gradio-randomize",     elem_classes="hidden-input", container=False)
+    guidance_scale    = gr.Slider(minimum=1.0, maximum=10.0, step=0.1, value=1.0, elem_id="gradio-guidance", elem_classes="hidden-input", container=False)
+    steps             = gr.Slider(minimum=1, maximum=50, step=1, value=4,       elem_id="gradio-steps",      elem_classes="hidden-input", container=False)
+    result            = gr.Image(elem_id="gradio-result",                       elem_classes="hidden-input", container=False, format="png")
+
+    example_idx    = gr.Textbox(value="", elem_id="example-idx-input",  elem_classes="hidden-input", container=False)
+    example_result = gr.Textbox(value="", elem_id="example-result-data", elem_classes="hidden-input", container=False)
+    example_load_btn = gr.Button("Load Example", elem_id="example-load-btn")
+
+    gr.HTML(f"""
+    <div class="app-shell">
+
+      <!-- ── Header ──────────────────────────────────────────────────────── -->
+      <div class="app-header">
+        <div class="app-header-left">
+          <div class="app-logo">{ROCKET_LOGO_SVG}</div>
+          <span class="app-title">Qwen-Image-Edit</span>
+          <span class="app-badge">2511</span>
+          <span class="app-badge fast">4-Step Fast</span>
+        </div>
+        <a href="https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load"
+           target="_blank"
+           style="font-size:12px;color:var(--text3);text-decoration:none;font-weight:600;display:flex;align-items:center;gap:5px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+
+      <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+      <div class="app-toolbar">
+        <button id="tb-upload" class="modern-tb-btn" title="Upload images">
+          {UPLOAD_SVG}<span class="tb-label">Upload</span>
+        </button>
+        <button id="tb-remove" class="modern-tb-btn" title="Remove selected image">
+          {REMOVE_SVG}<span class="tb-label">Remove</span>
+        </button>
+        <button id="tb-clear" class="modern-tb-btn" title="Clear all images">
+          {CLEAR_SVG}<span class="tb-label">Clear All</span>
+        </button>
+        <div class="tb-sep"></div>
+        <span id="tb-image-count" class="tb-info">No images</span>
+      </div>
+
+      <!-- ── Main row ────────────────────────────────────────────────────── -->
+      <div class="app-main-row">
+
+        <!-- Left: gallery + prompts + examples -->
+        <div class="app-main-left">
+
+          <!-- Drop zone / gallery -->
+          <div id="gallery-drop-zone">
+            <div id="upload-prompt" class="upload-prompt-modern">
+              <div id="upload-click-area" class="upload-click-area">
+                <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="8" y="14" width="64" height="52" rx="6" fill="none"
+                        stroke="#FF4500" stroke-width="2" stroke-dasharray="4 3"/>
+                  <polygon points="12,62 30,40 42,50 54,34 68,62"
+                           fill="rgba(255,69,0,0.12)" stroke="#FF4500" stroke-width="1.5"/>
+                  <circle cx="28" cy="30" r="6"
+                          fill="rgba(255,69,0,0.18)" stroke="#FF4500" stroke-width="1.5"/>
+                </svg>
+                <span class="upload-main-text">Click or drag images here</span>
+                <span class="upload-sub-text">Supports multiple images for reference-based editing and guided manipulation</span>
+              </div>
+            </div>
+            <input id="custom-file-input" type="file" accept="image/*" multiple style="display:none;" />
+            <div id="image-gallery-grid" class="image-gallery-grid" style="display:none;"></div>
+          </div>
+
+          <!-- Hint bar -->
+          <div class="hint-bar">
+            <b>Upload:</b> Click or drag images &nbsp;·&nbsp;
+            <b>Multi-image:</b> Upload multiple for reference editing &nbsp;·&nbsp;
+            <kbd>Remove</kbd> deletes selected &nbsp;·&nbsp;
+            <kbd>Clear All</kbd> removes everything
+          </div>
+
+          <!-- Quick prompt chips -->
+          <div class="suggestions-section">
+            <div class="suggestions-title">Quick Prompts</div>
+            <div class="suggestions-wrap">
+              <button class="suggestion-chip" onclick="window.__setPrompt('Transform into anime.')">Anime</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Convert it to black and white.')">B&amp;W</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Add cinematic lighting with warm orange tones and film grain.')">Cinematic</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Apply oil painting effect with visible brush strokes.')">Oil Paint</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Upscale this picture to 4K resolution.')">Upscale 4K</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Make it look like a watercolor painting with soft edges.')">Watercolor</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Convert to detailed pencil sketch with cross-hatching and shading.')">Pencil Sketch</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Apply pop art style with bold colors and halftone patterns.')">Pop Art</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Apply a vintage retro film look with faded colors and light leaks.')">Vintage Retro</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Add neon glow effects with vibrant colors against a dark background.')">Neon Glow</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Convert to pixel art style with a retro 16-bit aesthetic.')">Pixel Art</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Transform into a noir comic book style.')">Noir Comic</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Transform into a hyper-realistic face portrait.')">HyperReal</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Unblur and upscale.')">Unblur</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Transform into Pixar-inspired 3D.')">Pixar 3D</button>
+              <button class="suggestion-chip" onclick="window.__setPrompt('Paint with manga tone.')">Manga Tone</button>
+            </div>
+          </div>
+
+          <!-- Examples section -->
+          <div class="examples-section">
+            <div class="examples-title">Quick Examples — click to load</div>
+            <div class="examples-scroll">
+              {EXAMPLE_CARDS_HTML}
+            </div>
+          </div>
+
+        </div><!-- /left -->
+
+        <!-- Right: controls -->
+        <div class="app-main-right">
+
+          <!-- Edit prompt -->
+          <div class="panel-card">
+            <div class="panel-card-title">Edit Instruction</div>
+            <div class="panel-card-body">
+              <label class="modern-label" for="custom-prompt-input">Prompt</label>
+              <textarea id="custom-prompt-input" class="modern-textarea" rows="3"
+                        placeholder="e.g., transform into anime, upscale, change lighting…"></textarea>
+            </div>
+          </div>
+
+          <!-- LoRA selector (below prompt) -->
+          <div class="lora-selector-card">
+            <div class="lora-selector-body">
+              <div class="lora-select-label">Editing Style / LoRA</div>
+              <select id="custom-lora-select" class="lora-native-select">
+                {LORA_OPTIONS_HTML}
+              </select>
+            </div>
+          </div>
+
+          <!-- Run button -->
+          <div style="padding:14px 18px 6px;">
+            <button id="custom-run-btn" class="btn-run">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C12 2 7 6.5 7 13c0 1.4.3 2.7.8 3.9L5 19.7l1.4 1.4 2.8-2.8c1.2.5 2.5.7 3.8.7s2.6-.2 3.8-.7l2.8 2.8 1.4-1.4-2.8-2.8c.5-1.2.8-2.5.8-3.9 0-6.5-5-11-5-11z"/>
+                <circle cx="12" cy="13" r="2"/>
+              </svg>
+              <span id="run-btn-label">Edit Image</span>
+            </button>
+          </div>
+
+          <!-- Output -->
+          <div class="output-frame" style="flex:1">
+            <div class="out-title">
+              <span>Output</span>
+              <span id="dl-btn-output" class="out-download-btn" title="Download result">
+                {DOWNLOAD_SVG} Save
+              </span>
+            </div>
+            <div class="out-body" id="output-image-container">
+              <div class="modern-loader" id="output-loader">
+                <div class="loader-spinner"></div>
+                <div class="loader-text">Processing image…</div>
+                <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
+              </div>
+              <div class="out-placeholder" id="output-placeholder">Result will appear here</div>
+            </div>
+          </div>
+
+          <!-- Advanced settings -->
+          <div class="settings-group">
+            <div class="settings-group-title">Advanced Settings</div>
+            <div class="settings-group-body">
+              <div class="slider-row">
+                <label>Seed</label>
+                <input type="range" id="custom-seed" min="0" max="2147483647" step="1" value="0">
+                <span class="slider-val" id="custom-seed-val">0</span>
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="custom-randomize" checked>
+                <label for="custom-randomize">Randomize seed</label>
+              </div>
+              <div class="slider-row">
+                <label>Guidance</label>
+                <input type="range" id="custom-guidance" min="1" max="10" step="0.1" value="1.0">
+                <span class="slider-val" id="custom-guidance-val">1.0</span>
+              </div>
+              <div class="slider-row">
+                <label>Steps</label>
+                <input type="range" id="custom-steps" min="1" max="50" step="1" value="4">
+                <span class="slider-val" id="custom-steps-val">4</span>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /right -->
+      </div><!-- /main-row -->
+
+      <!-- Footer note -->
+      <div class="exp-note">
+        Experimental Space for
+        <a href="https://huggingface.co/Qwen/Qwen-Image-Edit-2511" target="_blank">Qwen-Image-Edit-2511</a>
+        &middot;
+        <a href="https://github.com/PRITHIVSAKTHIUR/Qwen-Image-Edit-2511-LoRAs-Fast-Lazy-Load" target="_blank">GitHub</a>
+        &middot; LoRAs loaded lazily on first use
+      </div>
+
+      <!-- Status bar -->
+      <div class="app-statusbar">
+        <div class="sb-section" id="sb-image-count">No images uploaded</div>
+        <div class="sb-section sb-fixed">Ready</div>
+      </div>
+
+    </div><!-- /app-shell -->
+    """)
+
+    # Off-screen Gradio run button wired by JS
+    run_btn = gr.Button("Run", elem_id="gradio-run-btn")
+
+    demo.load(fn=None, js=gallery_js)
+    demo.load(fn=None, js=wire_outputs_js)
+
+    run_btn.click(
         fn=infer,
-        inputs=[images, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
-        outputs=[output_image, seed]
+        inputs=[hidden_images_b64, prompt, lora_adapter, seed, randomize_seed, guidance_scale, steps],
+        outputs=[result, seed],
+        js=r"""(imgs, p, la, s, rs, gs, st) => {
+            const images   = window.__uploadedImages || [];
+            const b64Array = images.map(img => img.b64);
+            const imgsJson = JSON.stringify(b64Array);
+            const promptEl = document.getElementById('custom-prompt-input');
+            const loraEl   = document.getElementById('custom-lora-select');
+            const promptVal = promptEl ? promptEl.value : p;
+            const loraVal   = loraEl   ? loraEl.value   : la;
+            return [imgsJson, promptVal, loraVal, s, rs, gs, st];
+        }""",
+    )
+
+    example_load_btn.click(
+        fn=load_example_data,
+        inputs=[example_idx],
+        outputs=[example_result],
+        queue=False,
     )
 
 if __name__ == "__main__":
-    demo.queue(max_size=50).launch(css=css, theme=orange_red_theme, mcp_server=True, ssr_mode=False, show_error=True)
+    demo.queue(max_size=50).launch(
+        css=css,
+        mcp_server=True,
+        ssr_mode=False,
+        show_error=True,
+        allowed_paths=["examples"],
+    )
