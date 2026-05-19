@@ -1394,7 +1394,7 @@ LORA_OPTIONS_HTML = "\n".join(
     for name in ADAPTER_NAMES
 )
 
-with gr.Blocks(css=css) as demo:
+with gr.Blocks() as demo:
 
     hidden_images_b64 = gr.Textbox(value="[]",  elem_id="hidden-images-b64",   elem_classes="hidden-input", container=False)
     prompt            = gr.Textbox(value="",    elem_id="prompt-gradio-input",  elem_classes="hidden-input", container=False)
