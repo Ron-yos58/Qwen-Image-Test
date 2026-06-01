@@ -274,7 +274,7 @@ def b64_to_pil_list(b64_json_str):
     return pil_images
 
 
-def update_dimensions_on_upload(image):
+'''def update_dimensions_on_upload(image):
     if image is None:
         return 1024, 1024
     w, h = image.size
@@ -285,8 +285,13 @@ def update_dimensions_on_upload(image):
         nh = 1024
         nw = int(nh * w / h)
     return (nw // 8) * 8, (nh // 8) * 8
-
-
+'''
+def update_dimensions_on_upload(image):
+    w, h = image.size
+    # فقط تأكد من القسمة على 8 دون تغيير الحجم
+    new_w = ((w + 7) // 8) * 8
+    new_h = ((h + 7) // 8) * 8
+    return new_w, new_h
 @spaces.GPU
 def infer(
     images_b64_json,
