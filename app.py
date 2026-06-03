@@ -287,7 +287,7 @@ def update_dimensions_on_upload(image):
     return (nw // 8) * 8, (nh // 8) * 8
 
 
-@spaces.GPU
+@spaces.GPU(size="xlarge")
 def infer(
     images_b64_json,
     prompt,
