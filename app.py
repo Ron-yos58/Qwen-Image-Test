@@ -74,11 +74,15 @@ else:
 
 def build_device_map_kwargs():
     if GPU_COUNT >= 2:
-        max_memory = {device_index: KAGGLE_GPU_MEMORY for device_index in range(GPU_COUNT)}
-        max_memory["cpu"] = os.environ.get("KAGGLE_CPU_MEMORY", "48GiB")
+        # Custom device map to keep text_encoder on GPU 0
+        # This avoids CPU offload which causes OOM during inference
         return {
             "device_map": "balanced",
-            "max_memory": max_memory,
+            "max_memory": {
+                0: "11GiB",   # GPU 0: text_encoder + early transformer blocks
+                1: "14GiB",   # GPU 1: later transformer blocks + VAE
+                "cpu": "48GiB"
+            },
         }
     if GPU_COUNT == 1:
         return {"device_map": {"": 0}}
@@ -117,13 +121,6 @@ try:
     print("Attention slicing enabled for lower memory inference.")
 except Exception as e:
     print(f"Warning: Could not enable attention slicing: {e}")
-
-try:
-    # Enable sequential CPU offload to move unused layers to CPU during inference
-    pipe.enable_sequential_cpu_offload()
-    print("Sequential CPU offload enabled to manage VRAM.")
-except Exception as e:
-    print(f"Warning: Could not enable sequential CPU offload: {e}")
 
 print("pipeline execution device:", pipe._execution_device)
 print("transformer device map:", getattr(pipe.transformer, "hf_device_map", None))
