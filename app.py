@@ -29,6 +29,14 @@ except ImportError:
 
     spaces = _SpacesFallback()
 
+# PyTorch memory optimization for multi-GPU or constrained memory
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+# Aggressive memory cleanup before loading models
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
 MAX_SEED = np.iinfo(np.int32).max
 LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
 
