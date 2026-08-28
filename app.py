@@ -74,13 +74,14 @@ else:
 
 def build_device_map_kwargs():
     if GPU_COUNT >= 2:
-        # Aggressive allocation: minimize GPU 0, maximize GPU 1 for VAE inference memory
+        # Keep GPU 0 available for the CPU-offloaded text encoder and reserve
+        # GPU 1 headroom for VAE activations during image encode/decode.
         return {
             "device_map": "balanced",
             "max_memory": {
-                0: "7GiB",    # GPU 0: text_encoder + minimal transformer blocks
-                1: "14.5GiB", # GPU 1: most transformer blocks + VAE (full headroom)
-                "cpu": "48GiB"
+                0: "7GiB",
+                1: "13GiB",
+                "cpu": "48GiB",
             },
         }
     if GPU_COUNT == 1:
@@ -113,13 +114,18 @@ try:
 except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
-# Memory optimization for inference on limited VRAM
+# Process the Qwen VAE in overlapping 256px tiles. This reduces the peak VAE
+# activation allocation that otherwise exhausts GPU 1 at 1024px input size.
 try:
-    # Enable attention slicing to reduce intermediate tensor memory
-    pipe.enable_attention_slicing()
-    print("Attention slicing enabled for lower memory inference.")
+    pipe.vae.enable_tiling(
+        tile_sample_min_height=256,
+        tile_sample_min_width=256,
+        tile_sample_stride_height=192,
+        tile_sample_stride_width=192,
+    )
+    print("VAE tiling enabled for lower-memory image processing.")
 except Exception as e:
-    print(f"Warning: Could not enable attention slicing: {e}")
+    print(f"Warning: Could not enable VAE tiling: {e}")
 
 print("pipeline execution device:", pipe._execution_device, flush=True)
 transformer_map = getattr(pipe.transformer, "hf_device_map", None)
