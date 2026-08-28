@@ -74,13 +74,12 @@ else:
 
 def build_device_map_kwargs():
     if GPU_COUNT >= 2:
-        # Custom device map to keep text_encoder on GPU 0
-        # This avoids CPU offload which causes OOM during inference
+        # Aggressive allocation: minimize GPU 0, maximize GPU 1 for VAE inference memory
         return {
             "device_map": "balanced",
             "max_memory": {
-                0: "11GiB",   # GPU 0: text_encoder + early transformer blocks
-                1: "14GiB",   # GPU 1: later transformer blocks + VAE
+                0: "7GiB",    # GPU 0: text_encoder + minimal transformer blocks
+                1: "14.5GiB", # GPU 1: most transformer blocks + VAE (full headroom)
                 "cpu": "48GiB"
             },
         }
