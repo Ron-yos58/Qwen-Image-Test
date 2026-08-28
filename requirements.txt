@@ -1,14 +1,15 @@
+# Kaggle already provides a matched PyTorch/CUDA stack.
+# Do not add torch, torchvision, torchaudio, torchao, or CUDA toolkit packages here.
 git+https://github.com/huggingface/accelerate.git
 git+https://github.com/huggingface/diffusers.git
 git+https://github.com/huggingface/peft.git
 git+https://github.com/huggingface/transformers.git
 huggingface_hub
+safetensors
+tokenizers>=0.23.1,<0.24.0
 sentencepiece
-torchvision
 kernels
 spaces
 hf_xet
 gradio==6.17.3
-torch==2.11.0
-numpy
 av

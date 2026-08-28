@@ -2,7 +2,6 @@ import os
 import gc
 import gradio as gr
 import numpy as np
-import spaces
 import torch
 import random
 import base64
@@ -11,44 +10,101 @@ import html as html_lib
 from io import BytesIO
 from PIL import Image
 
+# Kaggle's system volume is small; keep Hub/Xet downloads on the working volume.
+if os.path.isdir("/kaggle/working"):
+    hf_cache_dir = os.environ.setdefault("HF_HOME", "/kaggle/working/hf-cache")
+    os.environ.setdefault("HF_HUB_CACHE", os.path.join(hf_cache_dir, "hub"))
+    os.environ.setdefault("HF_XET_CACHE", os.path.join(hf_cache_dir, "xet"))
+
+try:
+    import spaces
+except ImportError:
+    class _SpacesFallback:
+        @staticmethod
+        def GPU(*args, **kwargs):
+            def decorator(fn):
+                return fn
+
+            return decorator
+
+    spaces = _SpacesFallback()
+
 MAX_SEED = np.iinfo(np.int32).max
 LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+GPU_COUNT = torch.cuda.device_count() if torch.cuda.is_available() else 0
+PRIMARY_DEVICE = torch.device("cuda:0" if GPU_COUNT else "cpu")
+KAGGLE_GPU_MEMORY = os.environ.get("KAGGLE_GPU_MEMORY", "14GiB")
 
 print("CUDA_VISIBLE_DEVICES=", os.environ.get("CUDA_VISIBLE_DEVICES"))
 print("torch.__version__ =", torch.__version__)
 print("torch.version.cuda =", torch.version.cuda)
 print("cuda available:", torch.cuda.is_available())
-print("cuda device count:", torch.cuda.device_count())
+print("cuda device count:", GPU_COUNT)
 if torch.cuda.is_available():
     print("current device:", torch.cuda.current_device())
-    print("device name:", torch.cuda.get_device_name(torch.cuda.current_device()))
+    for device_index in range(GPU_COUNT):
+        print(
+            f"device {device_index}:",
+            torch.cuda.get_device_name(device_index),
+            "capability",
+            torch.cuda.get_device_capability(device_index),
+        )
 
-print("Using device:", device)
+print("Using primary execution device:", PRIMARY_DEVICE)
 
 from diffusers import FlowMatchEulerDiscreteScheduler
 from qwenimage.pipeline_qwenimage_edit_plus import QwenImageEditPlusPipeline
 from qwenimage.transformer_qwenimage import QwenImageTransformer2DModel
 from qwenimage.qwen_fa3_processor import QwenDoubleStreamAttnProcessorFA3
 
-dtype = torch.bfloat16
+if GPU_COUNT:
+    dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+else:
+    dtype = torch.float32
 
+
+def build_device_map_kwargs():
+    if GPU_COUNT >= 2:
+        max_memory = {device_index: KAGGLE_GPU_MEMORY for device_index in range(GPU_COUNT)}
+        max_memory["cpu"] = os.environ.get("KAGGLE_CPU_MEMORY", "48GiB")
+        return {
+            "device_map": "balanced",
+            "max_memory": max_memory,
+        }
+    if GPU_COUNT == 1:
+        return {"device_map": {"": 0}}
+    return {}
+
+
+DEVICE_MAP_KWARGS = build_device_map_kwargs()
+print("torch dtype:", dtype)
+print("device map kwargs:", DEVICE_MAP_KWARGS)
+
+transformer = QwenImageTransformer2DModel.from_pretrained(
+    "prithivMLmods/Qwen-Image-Edit-Rapid-AIO-V19",
+    torch_dtype=dtype,
+    **DEVICE_MAP_KWARGS,
+)
 pipe = QwenImageEditPlusPipeline.from_pretrained(
     "Qwen/Qwen-Image-Edit-2511",
-    transformer=QwenImageTransformer2DModel.from_pretrained(
-        "prithivMLmods/Qwen-Image-Edit-Rapid-AIO-V19",
-        torch_dtype=dtype,
-        device_map="cuda",
-    ),
     torch_dtype=dtype,
-).to(device)
+    transformer=transformer,
+    **DEVICE_MAP_KWARGS,
+)
+
+if not DEVICE_MAP_KWARGS:
+    pipe.to(PRIMARY_DEVICE)
 
 try:
     pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
     print("Flash Attention 3 Processor set successfully.")
 except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
+
+print("pipeline execution device:", pipe._execution_device)
+print("transformer device map:", getattr(pipe.transformer, "hf_device_map", None))
+print("text encoder device map:", getattr(pipe.text_encoder, "hf_device_map", None))
 
 ADAPTER_SPECS = {
     "Multiple-Angles": {
@@ -327,7 +383,7 @@ def infer(
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
 
-    generator = torch.Generator(device=device).manual_seed(seed)
+    generator = torch.Generator(device=PRIMARY_DEVICE).manual_seed(seed)
     negative_prompt = (
         "worst quality, low quality, bad anatomy, bad hands, text, error, missing fingers, "
         "extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry"
