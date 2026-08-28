@@ -375,14 +375,19 @@ def infer(
             LOADED_ADAPTERS.add(adapter_name)
         except Exception as e:
             print(f"⚠ Warning: Failed to load adapter {lora_adapter}: {e}")
-            # Don't crash—just skip this adapter
+            # Don't crash—just skip this adapter and use base model
             if "torch" in str(e).lower():
-                print(f"  Tip: Adapter requires newer torch version. Skipping {lora_adapter}.")
-            return gr.Info(f"Adapter '{lora_adapter}' unavailable on this system. Using default.")
+                print(f"  Tip: Adapter requires compatible torch version. Using base model instead.")
+            adapter_name = None
     else:
         print(f"--- Adapter {lora_adapter} already loaded. ---")
 
-    pipe.set_adapters([adapter_name], adapter_weights=[1.0])
+    # Set adapter only if it loaded successfully
+    if adapter_name:
+        pipe.set_adapters([adapter_name], adapter_weights=[1.0])
+    else:
+        # Use base model without adapter
+        pipe.disable_lora()
 
     if randomize_seed:
         seed = random.randint(0, MAX_SEED)
