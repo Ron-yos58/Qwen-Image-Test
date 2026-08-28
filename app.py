@@ -104,11 +104,6 @@ pipe = QwenImageEditPlusPipeline.from_pretrained(
 if not DEVICE_MAP_KWARGS:
     pipe.to(PRIMARY_DEVICE)
 
-# Force text_encoder to GPU 0 to avoid CPU-GPU transfer OOM
-if hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None:
-    pipe.text_encoder = pipe.text_encoder.to(PRIMARY_DEVICE)
-    print(f"Text encoder moved to {PRIMARY_DEVICE}")
-
 try:
     pipe.transformer.set_attn_processor(QwenDoubleStreamAttnProcessorFA3())
     print("Flash Attention 3 Processor set successfully.")
