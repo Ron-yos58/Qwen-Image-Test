@@ -110,6 +110,14 @@ try:
 except Exception as e:
     print(f"Warning: Could not set FA3 processor: {e}")
 
+# Memory optimization for inference on limited VRAM
+try:
+    # Enable attention slicing to reduce intermediate tensor memory
+    pipe.enable_attention_slicing()
+    print("Attention slicing enabled for lower memory inference.")
+except Exception as e:
+    print(f"Warning: Could not enable attention slicing: {e}")
+
 print("pipeline execution device:", pipe._execution_device)
 print("transformer device map:", getattr(pipe.transformer, "hf_device_map", None))
 print("text encoder device map:", getattr(pipe.text_encoder, "hf_device_map", None))
