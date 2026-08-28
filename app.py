@@ -374,7 +374,11 @@ def infer(
             pipe.load_lora_weights(spec["repo"], weight_name=spec["weights"], adapter_name=adapter_name)
             LOADED_ADAPTERS.add(adapter_name)
         except Exception as e:
-            raise gr.Error(f"Failed to load adapter {lora_adapter}: {e}")
+            print(f"⚠ Warning: Failed to load adapter {lora_adapter}: {e}")
+            # Don't crash—just skip this adapter
+            if "torch" in str(e).lower():
+                print(f"  Tip: Adapter requires newer torch version. Skipping {lora_adapter}.")
+            return gr.Info(f"Adapter '{lora_adapter}' unavailable on this system. Using default.")
     else:
         print(f"--- Adapter {lora_adapter} already loaded. ---")
 
