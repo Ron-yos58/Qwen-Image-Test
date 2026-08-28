@@ -329,9 +329,8 @@ def load_example_data(idx_str):
     return json.dumps({"images": b64_list, "prompt": ex["prompt"], "lora": ex["lora"], "names": names, "status": "ok"})
 
 
-print("Building example thumbnails…", flush=True)
-EXAMPLE_CARDS_HTML = build_example_cards_html()
-print(f"Built {len(EXAMPLES_CONFIG)} example cards.", flush=True)
+print("Skipping example cards (use base model for inference). Gradio launching...", flush=True)
+EXAMPLE_CARDS_HTML = ""  # Skip heavy example card generation
 
 
 def b64_to_pil_list(b64_json_str):
