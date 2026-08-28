@@ -1,5 +1,6 @@
 # Kaggle already provides a matched PyTorch/CUDA stack.
-# Do not add torch, torchvision, torchaudio, torchao, or CUDA toolkit packages here.
+# Do not add torch, torchvision, torchaudio, or CUDA toolkit packages here.
+# Explicitly upgrade torchao to fix adapter compatibility (Kaggle default is too old)
 git+https://github.com/huggingface/accelerate.git
 git+https://github.com/huggingface/diffusers.git
 git+https://github.com/huggingface/peft.git
@@ -13,3 +14,4 @@ spaces
 hf_xet
 gradio==6.17.3
 av
+torchao>=0.16.0
