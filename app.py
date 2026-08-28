@@ -118,6 +118,13 @@ try:
 except Exception as e:
     print(f"Warning: Could not enable attention slicing: {e}")
 
+try:
+    # Enable sequential CPU offload to move unused layers to CPU during inference
+    pipe.enable_sequential_cpu_offload()
+    print("Sequential CPU offload enabled to manage VRAM.")
+except Exception as e:
+    print(f"Warning: Could not enable sequential CPU offload: {e}")
+
 print("pipeline execution device:", pipe._execution_device)
 print("transformer device map:", getattr(pipe.transformer, "hf_device_map", None))
 print("text encoder device map:", getattr(pipe.text_encoder, "hf_device_map", None))
