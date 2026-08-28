@@ -122,9 +122,14 @@ try:
 except Exception as e:
     print(f"Warning: Could not enable attention slicing: {e}")
 
-print("pipeline execution device:", pipe._execution_device)
-print("transformer device map:", getattr(pipe.transformer, "hf_device_map", None))
-print("text encoder device map:", getattr(pipe.text_encoder, "hf_device_map", None))
+print("pipeline execution device:", pipe._execution_device, flush=True)
+transformer_map = getattr(pipe.transformer, "hf_device_map", None)
+if transformer_map:
+    print(f"transformer device map: {len(transformer_map)} modules distributed", flush=True)
+else:
+    print("transformer device map:", transformer_map, flush=True)
+text_enc_map = getattr(pipe.text_encoder, "hf_device_map", None)
+print("text encoder device map:", text_enc_map, flush=True)
 
 ADAPTER_SPECS = {
     "Multiple-Angles": {
@@ -280,7 +285,9 @@ def encode_full_image(path):
 
 def build_example_cards_html():
     cards = ""
+    total = len(EXAMPLES_CONFIG)
     for i, ex in enumerate(EXAMPLES_CONFIG):
+        print(f"Building example card {i+1}/{total}...", flush=True)
         thumbs_html = ""
         for path in ex["images"]:
             thumb = make_thumb_b64(path)
@@ -322,9 +329,9 @@ def load_example_data(idx_str):
     return json.dumps({"images": b64_list, "prompt": ex["prompt"], "lora": ex["lora"], "names": names, "status": "ok"})
 
 
-print("Building example thumbnails…")
+print("Building example thumbnails…", flush=True)
 EXAMPLE_CARDS_HTML = build_example_cards_html()
-print(f"Built {len(EXAMPLES_CONFIG)} example cards.")
+print(f"Built {len(EXAMPLES_CONFIG)} example cards.", flush=True)
 
 
 def b64_to_pil_list(b64_json_str):
